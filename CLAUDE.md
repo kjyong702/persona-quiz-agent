@@ -23,12 +23,14 @@ app/
   main.py          앱 초기화, 라우터 등록
   routers/         HTTP 입출력만 (검증은 스키마, 로직은 서비스에 위임)
   services/        비즈니스 로직 (판정 파이프라인, 페르소나 생성 포함)
-  repositories/    DB 접근 (SQLAlchemy 쿼리는 여기만)
+  repositories/    DB 접근 (SQLAlchemy 쿼리와 커밋은 여기만)
+  models/          SQLAlchemy 테이블 정의 (db-schema.md와 1대1)
   schemas/         Pydantic 요청/응답 모델
   core/            설정, 예외, 공용 클라이언트 (OpenAI, ChromaDB)
 ```
 
-- 의존 방향은 routers -> services -> repositories 단방향. 역방향 import 금지
+- 의존 방향은 routers -> services -> repositories -> models 단방향. 역방향 import 금지
+- **ORM 객체는 서비스 밖으로 나가지 않는다.** 서비스가 모델을 스키마로 변환해 리턴하고 라우터는 스키마만 다룬다. 라우터가 ORM 객체를 받으면 지연 로딩이 응답 직렬화 시점에 터지고 내부 컬럼이 그대로 노출된다
 - 외부 API(OpenAI) 호출은 core의 클라이언트 모듈을 거친다. 서비스에서 SDK 직접 호출 금지 (폴백/재시도를 한 곳에서 관리)
 
 ### 네이밍

@@ -9,6 +9,8 @@ from openai import APIError, AsyncOpenAI
 
 from app.core.config import settings
 from app.core.exceptions import EmbeddingUnavailableError
+from app.core.rate_limit import embedding_gate
+from app.core.retry import call_guarded
 
 _client: AsyncOpenAI | None = None
 
@@ -21,6 +23,10 @@ def _get_client() -> AsyncOpenAI:
         _client = AsyncOpenAI(
             api_key=settings.openai_api_key,
             timeout=settings.llm_timeout_seconds,
+            # SDK 자체 재시도를 끄고 우리가 관리한다. SDK가 안에서 몰래
+            # 다시 걸면 그 요청은 세마포어와 레이트 리미터를 거치지 않고 나가서
+            # 흐름 제어에 구멍이 생기고, 계측 숫자도 실제 호출 수와 어긋난다
+            max_retries=0,
         )
     return _client
 
@@ -33,14 +39,18 @@ async def embed(texts: list[str]) -> list[list[float]]:
     """
     if not texts:
         return []
-    try:
-        response = await _get_client().embeddings.create(
+
+    async def _call() -> object:
+        return await _get_client().embeddings.create(
             model=settings.embedding_model,
             input=texts,
         )
+
+    try:
+        response = await call_guarded(embedding_gate, "embedding", _call)
     except APIError as exc:
         raise EmbeddingUnavailableError(f"임베딩 호출 실패: {exc}") from exc
-    return [item.embedding for item in response.data]
+    return [item.embedding for item in response.data]  # type: ignore[attr-defined]
 
 
 async def embed_one(text: str) -> list[float]:

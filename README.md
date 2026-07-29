@@ -58,6 +58,12 @@ API 문서는 http://127.0.0.1:8000/docs 에서 볼 수 있습니다.
 uv run pytest                    # 테스트
 ```
 
+부하 실험은 [docs/notes/concurrency.md](docs/notes/concurrency.md)를 따릅니다.
+
+```bash
+uv run python -m scripts.loadtest --requests 60 --concurrency 30 --label "대응 후"
+```
+
 ## 스택
 
 Python 3.12, FastAPI, SQLite(SQLAlchemy + aiosqlite), ChromaDB, OpenAI API, promptfoo
@@ -71,7 +77,7 @@ DB 접근을 비동기로 둔 것은 취향이 아니라 요구사항입니다. 
 | 0, 1 | 프로세스 자산과 설계 문서 | 완료 |
 | 2 | 스캐폴드, 퀴즈/세션 API | 완료 |
 | 3 | 하이브리드 판정 파이프라인 | 완료 |
-| 3.5 | 동시성과 레이트 리밋 대응 | |
+| 3.5 | 동시성과 레이트 리밋 대응 | 구현 완료, **실측 대기** |
 | 4 | 페르소나 레이어 | |
 | 5 | 평가 파이프라인 (promptfoo) | |
 | 6, 7 | 배포 구성, 마무리 | |

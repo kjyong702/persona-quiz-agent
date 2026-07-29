@@ -7,9 +7,16 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.core import metrics
 from app.core.database import Base, get_db
 from app.main import app
 from app.models import JudgeMethod, Persona, Question, QuizSet, SessionAnswer
+
+
+@pytest.fixture(autouse=True)
+def reset_metrics() -> None:
+    """계측 카운터는 프로세스 전역이라 테스트 사이에 새면 단정이 오염된다."""
+    metrics.reset()
 
 
 @pytest_asyncio.fixture

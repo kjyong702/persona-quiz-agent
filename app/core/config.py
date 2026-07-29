@@ -21,6 +21,25 @@ class Settings(BaseSettings):
 
     chroma_path: str = "./.chroma"
 
+    # --- 나가는 호출 흐름 제어 ---
+    # 두 스위치를 따로 둔 이유는 부하 실험 때문이다. 코드를 고치지 않고
+    # 설정만 뒤집어야 대응 전후를 같은 코드로 잰 값이 된다.
+    # 둘을 조합하면 흐름 정형과 실패 흡수가 각각 얼마나 기여했는지도 갈린다
+    gate_enabled: bool = True
+    retry_enabled: bool = True
+
+    # 쿼터는 모델과 엔드포인트마다 따로 걸리므로 게이트도 따로 둔다.
+    # 이 값은 실제 쿼터보다 **낮게** 잡아야 의미가 있다.
+    # 한도와 같게 두면 우리 쪽 계산 오차만큼 그대로 429가 난다
+    embedding_max_concurrency: int = 8
+    embedding_rpm: float = 2000
+    llm_max_concurrency: int = 4
+    llm_rpm: float = 300
+
+    retry_max_attempts: int = 4
+    retry_initial_delay: float = 0.5
+    retry_max_delay: float = 20.0
+
     # --- 판정 임계값 ---
     # Phase 5 평가 전의 임시값이다. 여기 적힌 숫자에는 아직 근거가 없고,
     # 라벨링 데이터셋으로 정확도와 LLM 호출 비율을 재서 확정한다

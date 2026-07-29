@@ -8,6 +8,8 @@ from openai import APIError, AsyncOpenAI
 from app.core import prompts
 from app.core.config import settings
 from app.core.exceptions import LLMUnavailableError
+from app.core.rate_limit import llm_gate
+from app.core.retry import call_guarded
 
 _client: AsyncOpenAI | None = None
 
@@ -20,6 +22,8 @@ def _get_client() -> AsyncOpenAI:
         _client = AsyncOpenAI(
             api_key=settings.openai_api_key,
             timeout=settings.llm_timeout_seconds,
+            # SDK 자체 재시도를 끄고 우리가 관리한다 (app/core/retry.py 참고)
+            max_retries=0,
         )
     return _client
 
@@ -52,8 +56,8 @@ def parse_verdict(raw: str) -> bool:
 async def judge_answer(
     question_text: str, expected_answers: list[str], answer_text: str
 ) -> bool:
-    try:
-        response = await _get_client().chat.completions.create(
+    async def _call() -> object:
+        return await _get_client().chat.completions.create(
             model=settings.judge_model,
             messages=[
                 {"role": "system", "content": prompts.load(prompts.JUDGE_PROMPT)},
@@ -68,10 +72,13 @@ async def judge_answer(
             temperature=0,
             max_tokens=5,
         )
+
+    try:
+        response = await call_guarded(llm_gate, "llm", _call)
     except APIError as exc:
         raise LLMUnavailableError(f"판정 호출 실패: {exc}") from exc
 
-    content = response.choices[0].message.content
+    content = response.choices[0].message.content  # type: ignore[attr-defined]
     if content is None:
         raise LLMUnavailableError("판정 응답이 비어 있습니다")
     return parse_verdict(content)

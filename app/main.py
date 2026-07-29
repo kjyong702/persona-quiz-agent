@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from app import models  # noqa: F401  create_all이 테이블을 알려면 모델이 임포트되어야 한다
 from app.core.database import Base, engine
 from app.core.exceptions import AppError
-from app.routers import personas, quiz_sets, sessions
+from app.routers import metrics, personas, quiz_sets, sessions
 
 
 @asynccontextmanager
@@ -35,6 +35,7 @@ async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
     )
 
 
+app.include_router(metrics.router)
 app.include_router(personas.router)
 app.include_router(quiz_sets.router)
 app.include_router(sessions.router)

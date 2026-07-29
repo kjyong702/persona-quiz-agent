@@ -46,3 +46,10 @@ class SessionAnswer(Base, TimestampMixin):
     judge_method: Mapped[str] = mapped_column(String(20))
     # 임베딩을 못 쓴 폴백 판정이면 유사도가 없다
     similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # 다른 문제의 기대 정답과의 최고 유사도.
+    # similarity와의 차이가 margin이고, 그 하한을 정하는 근거가 이 값이다
+    rival_similarity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # 유사도 값을 나중에 해석하려면 어떤 모델로 어떤 문자열 형태를 재었는지가 있어야 한다.
+    # 이 둘이 없으면 모델이나 템플릿을 바꿨을 때 과거 데이터를 쓸 수 있는지 판단할 수 없다
+    embedding_model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    template_version: Mapped[str | None] = mapped_column(String(20), nullable=True)

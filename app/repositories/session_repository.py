@@ -2,6 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import QuizSession, SessionAnswer
+from app.schemas.judge import JudgeResult
 
 
 async def create(db: AsyncSession, quiz_set_id: int, persona_id: int) -> QuizSession:
@@ -19,6 +20,30 @@ async def get(db: AsyncSession, session_id: int) -> QuizSession | None:
 async def save(db: AsyncSession, session: QuizSession) -> None:
     db.add(session)
     await db.commit()
+
+
+async def create_answer(
+    db: AsyncSession,
+    session_id: int,
+    question_id: int,
+    answer_text: str,
+    result: JudgeResult,
+) -> SessionAnswer:
+    answer = SessionAnswer(
+        session_id=session_id,
+        question_id=question_id,
+        answer_text=answer_text,
+        is_correct=result.is_correct,
+        judge_method=result.judge_method,
+        similarity=result.similarity,
+        rival_similarity=result.rival_similarity,
+        embedding_model=result.embedding_model,
+        template_version=result.template_version,
+    )
+    db.add(answer)
+    await db.commit()
+    await db.refresh(answer)
+    return answer
 
 
 async def count_correct(db: AsyncSession, session_id: int) -> int:

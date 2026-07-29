@@ -4,11 +4,14 @@ from app.core.exceptions import DomainError, ErrorCode, NotFoundError
 from app.models import Question, QuizSession, SessionStatus
 from app.repositories import persona_repository, quiz_repository, session_repository
 from app.schemas.session import (
+    AnswerRequest,
+    AnswerResult,
     NextQuestion,
     SessionCreated,
     SessionCreateRequest,
     SessionState,
 )
+from app.services import judge_service
 
 
 async def start_session(db: AsyncSession, request: SessionCreateRequest) -> SessionCreated:
@@ -76,6 +79,59 @@ async def next_question(db: AsyncSession, session_id: int) -> NextQuestion:
     session.current_order = next_order
     await session_repository.save(db, session)
     return _to_response(question)
+
+
+async def submit_answer(
+    db: AsyncSession, session_id: int, request: AnswerRequest
+) -> AnswerResult:
+    session = await _get_session_or_raise(db, session_id)
+
+    if session.status == SessionStatus.FINISHED:
+        raise DomainError(
+            ErrorCode.SESSION_FINISHED,
+            f"세션 {session_id}는 이미 종료되었습니다",
+        )
+
+    question = await _active_question_or_raise(db, session)
+    result = await judge_service.judge(question, request.answer)
+    await session_repository.create_answer(
+        db, session.id, question.id, request.answer, result
+    )
+
+    return AnswerResult(
+        is_correct=result.is_correct,
+        judge_method=result.judge_method,
+        similarity=result.similarity,
+        # 리액션 멘트는 Phase 4에서 채운다
+        host_message=None,
+    )
+
+
+async def _active_question_or_raise(db: AsyncSession, session: QuizSession) -> Question:
+    """지금 답변할 수 있는 문제. 없으면 NO_ACTIVE_QUESTION."""
+    if session.current_order == 0:
+        raise DomainError(
+            ErrorCode.NO_ACTIVE_QUESTION,
+            "아직 출제된 문제가 없습니다. 먼저 다음 문제를 받으세요",
+        )
+
+    question = await quiz_repository.get_question_by_order(
+        db, session.quiz_set_id, session.current_order
+    )
+    if question is None:
+        raise DomainError(
+            ErrorCode.NO_ACTIVE_QUESTION,
+            "출제된 문제를 찾을 수 없습니다",
+        )
+
+    if await session_repository.get_answer(db, session.id, question.id) is not None:
+        # 같은 문제에 두 번 답할 수 없다. 판정을 덮어쓰면 평가 데이터가 오염된다
+        raise DomainError(
+            ErrorCode.NO_ACTIVE_QUESTION,
+            "이미 답변한 문제입니다. 다음 문제를 받으세요",
+        )
+
+    return question
 
 
 async def _get_session_or_raise(db: AsyncSession, session_id: int) -> QuizSession:

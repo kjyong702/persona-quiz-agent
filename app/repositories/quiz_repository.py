@@ -31,6 +31,12 @@ async def count_questions(db: AsyncSession, quiz_set_id: int) -> int:
     return (await db.execute(stmt)).scalar_one()
 
 
+async def list_all_questions(db: AsyncSession) -> Sequence[Question]:
+    """전체 문제. 시드 임베딩 적재에서 앵커를 모을 때 쓴다."""
+    stmt = select(Question).order_by(Question.quiz_set_id, Question.order_no)
+    return (await db.execute(stmt)).scalars().all()
+
+
 async def get_question_by_order(
     db: AsyncSession, quiz_set_id: int, order_no: int
 ) -> Question | None:

@@ -10,6 +10,7 @@ class ErrorCode:
     QUIZ_SET_EMPTY = "QUIZ_SET_EMPTY"
     SESSION_FINISHED = "SESSION_FINISHED"
     NO_ACTIVE_QUESTION = "NO_ACTIVE_QUESTION"
+    JUDGE_UNAVAILABLE = "JUDGE_UNAVAILABLE"
 
 
 class AppError(Exception):
@@ -33,3 +34,27 @@ class NotFoundError(AppError):
 
 class DomainError(AppError):
     status_code = 400
+
+
+class ServiceUnavailableError(AppError):
+    status_code = 503
+
+
+class ExternalServiceError(Exception):
+    """외부 의존 호출 실패.
+
+    AppError와 계통을 나눈 이유: 이건 클라이언트에게 그대로 나가는 에러가 아니라
+    서비스가 붙잡아서 다른 경로로 갈지(폴백) 포기할지(503) 판단할 재료다.
+    """
+
+
+class EmbeddingUnavailableError(ExternalServiceError):
+    pass
+
+
+class VectorStoreUnavailableError(ExternalServiceError):
+    pass
+
+
+class LLMUnavailableError(ExternalServiceError):
+    pass

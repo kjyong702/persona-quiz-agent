@@ -6,6 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.schemas.common import ApiResponse, ok
 from app.schemas.session import (
+    AnswerRequest,
+    AnswerResult,
     NextQuestion,
     SessionCreated,
     SessionCreateRequest,
@@ -37,3 +39,10 @@ async def get_session(session_id: int, db: DbSession) -> ApiResponse[SessionStat
 @router.post("/{session_id}/next", response_model=ApiResponse[NextQuestion])
 async def next_question(session_id: int, db: DbSession) -> ApiResponse[NextQuestion]:
     return ok(await session_service.next_question(db, session_id))
+
+
+@router.post("/{session_id}/answer", response_model=ApiResponse[AnswerResult])
+async def submit_answer(
+    session_id: int, request: AnswerRequest, db: DbSession
+) -> ApiResponse[AnswerResult]:
+    return ok(await session_service.submit_answer(db, session_id, request))

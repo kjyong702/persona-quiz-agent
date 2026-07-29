@@ -46,12 +46,18 @@
 ```
 
 - 판정 흐름:
-  1. 답변 임베딩 -> ChromaDB에서 해당 문제의 기대 정답들과 코사인 유사도 계산
-  2. 최고 유사도 >= UPPER_THRESHOLD: 정답 확정 (LLM 호출 없음)
-  3. 최고 유사도 <= LOWER_THRESHOLD: 오답 확정 (LLM 호출 없음)
-  4. 중간 구간: LLM 2차 판정 (문제, 기대 정답, 사용자 답변을 주고 정오만 판단)
-  5. 임베딩 API 실패: LLM 단독 판정 폴백
-- 임계값은 환경변수 (기본값은 평가 파이프라인 결과로 정한다 — dev-plan Phase 5)
+  1. 답변을 **정규화 템플릿**에 통과시킨 뒤 임베딩. 기대 정답도 시드 시점에 같은 템플릿으로 임베딩되어 있다
+  2. ChromaDB 조회 2회. `similarity` = 해당 문제 기대 정답과의 최고 코사인 유사도, `rival_similarity` = 다른 문제 기대 정답과의 최고 유사도
+  3. `similarity >= UPPER_THRESHOLD` **그리고** `similarity - rival_similarity >= MIN_MARGIN`: 정답 확정 (LLM 호출 없음)
+  4. `similarity <= LOWER_THRESHOLD`: 오답 확정 (LLM 호출 없음)
+  5. 그 외(중간 구간, 또는 상한을 넘었지만 margin이 좁은 경우): LLM 2차 판정 (문제, 기대 정답, 사용자 답변을 주고 정오만 판단)
+  6. 임베딩 또는 벡터 조회 실패: LLM 단독 판정 폴백 (`judge_method = fallback`, similarity는 null)
+  7. LLM까지 실패: 판정하지 않고 503으로 실패시킨다. 틀린 판정을 조용히 내리는 것보다 낫다
+- 임계값과 margin은 환경변수 (기본값은 평가 파이프라인 결과로 정한다 — dev-plan Phase 5)
+
+**margin 조건을 둔 이유**: 절대 임계값만 두면 "몰라요", "네" 같은 짧고 흔한 답변이 어느 문제에서든 애매하게 높은 유사도를 받는다. 그런 답변은 이 문제의 정답과 가까운 만큼 다른 문제의 정답과도 가까우므로, 두 값의 차이를 보면 걸러진다. margin이 좁으면 즉시 판정하지 않고 LLM으로 넘긴다.
+
+**응답에 없는 것**: 임베딩 모델 ID와 템플릿 버전은 DB에만 남기고 응답에 싣지 않는다. 판정 재현에 필요한 값이지 클라이언트가 알 것은 아니다.
 
 ## 에러
 
@@ -63,3 +69,4 @@
 | `QUIZ_SET_EMPTY` | 400 | 문제가 하나도 없는 세트로 세션 시작 |
 | `SESSION_FINISHED` | 400 | 종료된 세션에 next 또는 answer |
 | `NO_ACTIVE_QUESTION` | 400 | next 없이 answer, 또는 이미 답변한 문제에 다시 answer |
+| `JUDGE_UNAVAILABLE` | 503 | 임베딩과 LLM이 모두 실패해 판정할 수 없음 |

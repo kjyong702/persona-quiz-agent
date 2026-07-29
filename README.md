@@ -39,6 +39,9 @@
 | [docs/api-spec.md](docs/api-spec.md) | API 스펙 |
 | [docs/dev-plan.md](docs/dev-plan.md) | 단계별 개발 계획 |
 | [docs/design/python-backend-rules.md](docs/design/python-backend-rules.md) | 백엔드 설계 규칙 (레이어링, 네이밍, 에러 포맷) |
+| [docs/notes/build-log.md](docs/notes/build-log.md) | 개발하면서 마주친 것들과 그 대응 |
+| [docs/notes/judge-normalization.md](docs/notes/judge-normalization.md) | 판정 입력 정규화와 템플릿 버전 정책 |
+| [docs/notes/concurrency.md](docs/notes/concurrency.md) | 동시성과 레이트 리밋 대응, 측정 방법 |
 | [docs/_templates/](docs/_templates/) | 다음 프로젝트에 복사해 쓰는 마스터 템플릿 |
 
 ## 실행

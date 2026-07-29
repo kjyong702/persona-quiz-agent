@@ -73,6 +73,78 @@ sleep_for = max(_MIN_SLEEP, deficit / rate)   # 최소 대기로 진행 보장
 
 ---
 
+## 🔴 잔액 소진이 429로 와서 재시도를 탔다 (Phase 3.5)
+
+### 무슨 일이 있었나
+
+API 키를 처음 넣고 시드를 돌렸더니 앵커 적재가 실패했다.
+
+```
+Error code: 429 - {'error': {'message': 'You exceeded your current quota...',
+                             'type': 'insufficient_quota',
+                             'code': 'insufficient_quota'}}
+```
+
+키는 유효한데 **결제 잔액이 0**이었다. 문제는 그다음이다. 이 응답이
+`RateLimitError`(429)로 오기 때문에 **우리 재시도 로직이 재시도 대상으로 판단했다.**
+결제하기 전에는 영원히 성공할 수 없는 호출을 백오프까지 밟아가며 4번 걸었다.
+
+실제 응답을 확인한 결과는 이랬다.
+
+| 항목 | 값 |
+|---|---|
+| 예외 클래스 | `RateLimitError` |
+| status_code | 429 |
+| code | `insufficient_quota` |
+| retry-after 헤더 | 없음 |
+
+### 왜 문제인가
+
+두 가지다.
+
+**1. 무의미한 대기.** 사용자는 절대 성공하지 않을 호출을 기다린다.
+
+**2. 측정이 거짓말을 한다.** 이게 더 나쁘다. Phase 3.5의 부하 실험은
+"429가 몇 번 났고 대응이 얼마나 흡수했는가"를 재는 것인데, **실험 도중
+잔액이 떨어지면 그게 전부 레이트 리밋으로 집계된다.** 결제 사고를 보고
+"우리 리미터가 부족하다"는 결론을 내리게 된다.
+
+같은 429여도 뜻이 완전히 다르다.
+
+| 코드 | 뜻 | 재시도 |
+|---|---|---|
+| `rate_limit_exceeded` | 지금 말고 나중에 | 한다 |
+| `insufficient_quota` | 결제하기 전까지 영원히 안 됨 | **안 한다** |
+
+### 어떻게 막았나
+
+상태 코드만 보지 않고 **본문의 오류 코드까지 본다.**
+
+```python
+_TERMINAL_ERROR_CODES = frozenset({"insufficient_quota", "billing_hard_limit_reached"})
+
+def is_quota_exhausted(exc): return getattr(exc, "code", None) in _TERMINAL_ERROR_CODES
+```
+
+계측도 `rate_limited`와 `quota_exhausted`로 갈라 센다.
+
+### 배운 것
+
+**HTTP 상태 코드는 분류의 시작이지 끝이 아니다.** 429 하나에 성격이 다른
+상황이 여럿 들어간다. 재시도 여부처럼 중요한 판단을 상태 코드만으로 내리면
+"다시 걸면 되는 것"과 "다시 걸면 안 되는 것"이 한 덩어리가 된다.
+
+그리고 **이건 실제로 호출해봐야만 나온다.** 목으로 짠 429는 우리가 정한
+모양대로만 오기 때문에, 제공사가 같은 코드에 다른 의미를 실어 보낸다는 것을
+알 수 없다.
+
+### 재발 방지
+
+`test_quota_exhaustion_is_not_retried`, `test_quota_exhaustion_counts_separately`.
+목으로 쓰는 응답 본문은 **실제로 받은 것을 그대로 옮겨 적었다.**
+
+---
+
 ## 🟡 `incorrect`는 `correct`를 포함한다 (Phase 3)
 
 LLM 판정 응답을 불리언으로 바꾸는 자리다. 이렇게 짜면 **모든 오답이 정답이 된다.**

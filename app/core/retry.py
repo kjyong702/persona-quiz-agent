@@ -54,12 +54,30 @@ def retry_after_seconds(exc: BaseException) -> float | None:
     return None
 
 
+# 429로 오지만 다시 걸어도 절대 성공하지 않는 오류 코드.
+# 잔액 소진이 대표적이다. 결제하기 전까지는 몇 번을 걸어도 같은 답이 온다
+_TERMINAL_ERROR_CODES = frozenset({"insufficient_quota", "billing_hard_limit_reached"})
+
+
+def is_quota_exhausted(exc: BaseException) -> bool:
+    """상태 코드는 429인데 실은 결제 문제인가.
+
+    같은 429여도 뜻이 완전히 다르다. 레이트 리밋은 "지금 말고 나중에"지만
+    잔액 소진은 "결제하기 전까지 영원히 안 된다"다. 둘을 같이 다루면
+    재시도가 무의미하게 대기 시간만 늘리고, 부하 실험에서는 결제 사고가
+    레이트 리밋 문제로 집계되어 측정 자체가 거짓말이 된다.
+    """
+    return getattr(exc, "code", None) in _TERMINAL_ERROR_CODES
+
+
 def is_retryable(exc: BaseException) -> bool:
     """다시 걸어볼 만한 실패인가.
 
     400이나 401은 몇 번을 다시 걸어도 같은 답이 온다. 재시도는 쿼터만 쓰고
     사용자 대기 시간만 늘린다. 잘못된 요청과 일시적 실패를 섞으면 안 된다.
     """
+    if is_quota_exhausted(exc):
+        return False
     if isinstance(exc, (APIConnectionError, APITimeoutError, RateLimitError)):
         return True
     if isinstance(exc, APIStatusError):
@@ -107,8 +125,12 @@ async def call_guarded(
         async with gate.hold():
             try:
                 result = await call()
-            except RateLimitError:
-                metrics.increment(f"{operation}.rate_limited")
+            except RateLimitError as exc:
+                # 429 안에서 갈라 센다. 섞으면 부하 실험의 429 집계가 오염된다
+                if is_quota_exhausted(exc):
+                    metrics.increment(f"{operation}.quota_exhausted")
+                else:
+                    metrics.increment(f"{operation}.rate_limited")
                 raise
         metrics.increment(f"{operation}.success")
         return result

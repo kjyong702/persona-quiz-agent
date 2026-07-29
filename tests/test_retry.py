@@ -17,6 +17,7 @@ from app.core.rate_limit import OutboundGate
 from app.core.retry import (
     WaitRespectingRetryAfter,
     call_guarded,
+    is_quota_exhausted,
     is_retryable,
     retry_after_seconds,
 )
@@ -29,6 +30,22 @@ def _response(status: int, headers: dict[str, str] | None = None) -> httpx.Respo
 
 def rate_limit_error(headers: dict[str, str] | None = None) -> RateLimitError:
     return RateLimitError("rate limited", response=_response(429, headers), body=None)
+
+
+def quota_exhausted_error() -> RateLimitError:
+    """잔액 소진. 상태 코드는 429지만 결제 문제다.
+
+    실제로 받은 응답을 그대로 옮겼다 (2026-07-30, 충전 전 계정).
+    """
+    body = {
+        "error": {
+            "message": "You exceeded your current quota, please check your plan and billing details.",
+            "type": "insufficient_quota",
+            "param": None,
+            "code": "insufficient_quota",
+        }
+    }
+    return RateLimitError("quota", response=_response(429), body=body["error"])
 
 
 def status_error(status: int) -> APIStatusError:
@@ -83,6 +100,30 @@ def test_returns_none_for_non_api_exception() -> None:
 )
 def test_retryable_failures(exc: BaseException) -> None:
     assert is_retryable(exc) is True
+
+
+def test_quota_exhaustion_is_not_retried() -> None:
+    """429지만 결제 문제라 다시 걸어도 영원히 같은 답이 온다.
+
+    실제로 겪었다. 잔액이 없는 키로 시드를 돌렸더니 insufficient_quota가
+    RateLimitError(429)로 왔고, 재시도가 붙어 백오프까지 밟았다.
+    """
+    assert is_retryable(quota_exhausted_error()) is False
+
+
+async def test_quota_exhaustion_counts_separately(gate: OutboundGate) -> None:
+    """레이트 리밋 집계에 섞이면 부하 실험 결과가 거짓말이 된다."""
+
+    async def out_of_credit() -> str:
+        raise quota_exhausted_error()
+
+    with pytest.raises(RateLimitError):
+        await call_guarded(gate, "test", out_of_credit)
+
+    counters = metrics.snapshot()["counters"]
+    assert counters["test.quota_exhausted"] == 1
+    assert "test.rate_limited" not in counters
+    assert counters["test.attempt"] == 1  # 재시도하지 않았다
 
 
 @pytest.mark.parametrize("status", [400, 401, 403, 404, 422])

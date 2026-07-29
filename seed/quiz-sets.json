@@ -1,0 +1,94 @@
+[
+  {
+    "title": "생활 상식",
+    "description": "일상에서 한 번쯤 들어본 기본 상식 열 문제",
+    "questions": [
+      {
+        "question_text": "대한민국의 수도는 어디인가요?",
+        "expected_answers": ["서울", "서울특별시", "대한민국의 수도는 서울입니다"]
+      },
+      {
+        "question_text": "태양계에서 가장 큰 행성은 무엇인가요?",
+        "expected_answers": ["목성", "주피터", "가장 큰 행성은 목성입니다"]
+      },
+      {
+        "question_text": "훈민정음을 만든 조선의 왕은 누구인가요?",
+        "expected_answers": ["세종대왕", "세종", "조선 4대 왕 세종"]
+      },
+      {
+        "question_text": "세계에서 가장 넓은 대양은 어디인가요?",
+        "expected_answers": ["태평양", "퍼시픽 오션", "가장 넓은 바다는 태평양입니다"]
+      },
+      {
+        "question_text": "하계 올림픽은 몇 년마다 열리나요?",
+        "expected_answers": ["4년마다", "4년", "사 년에 한 번씩"]
+      },
+      {
+        "question_text": "지구에서 가장 높은 산은 무엇인가요?",
+        "expected_answers": ["에베레스트산", "에베레스트", "초모룽마"]
+      },
+      {
+        "question_text": "빛의 삼원색 세 가지는 무엇인가요?",
+        "expected_answers": ["빨강 초록 파랑", "RGB", "적색 녹색 청색"]
+      },
+      {
+        "question_text": "대한민국의 화폐 단위는 무엇인가요?",
+        "expected_answers": ["원", "대한민국 원", "KRW"]
+      },
+      {
+        "question_text": "일 년 중 낮이 가장 긴 절기는 무엇인가요?",
+        "expected_answers": ["하지", "하지입니다", "여름 절기인 하지"]
+      },
+      {
+        "question_text": "피아노의 건반은 모두 몇 개인가요?",
+        "expected_answers": ["88개", "88", "여든여덟 개"]
+      }
+    ]
+  },
+  {
+    "title": "과학 상식",
+    "description": "중고등학교 교과 수준의 기초 과학 열 문제",
+    "questions": [
+      {
+        "question_text": "물이 어는 온도는 섭씨 몇 도인가요?",
+        "expected_answers": ["0도", "섭씨 0도", "영도"]
+      },
+      {
+        "question_text": "사람의 몸에서 산소를 운반하는 혈액 세포는 무엇인가요?",
+        "expected_answers": ["적혈구", "붉은 피톨", "산소를 나르는 적혈구"]
+      },
+      {
+        "question_text": "식물이 빛을 이용해 스스로 양분을 만드는 과정을 무엇이라고 하나요?",
+        "expected_answers": ["광합성", "광합성 작용"]
+      },
+      {
+        "question_text": "소리는 어떤 환경에서 전달되지 않나요?",
+        "expected_answers": ["진공", "진공 상태", "공기가 없는 곳"]
+      },
+      {
+        "question_text": "지구가 태양 주위를 한 바퀴 도는 데 걸리는 시간은 얼마인가요?",
+        "expected_answers": ["1년", "약 365일", "365일"]
+      },
+      {
+        "question_text": "원소기호 Fe는 어떤 금속을 뜻하나요?",
+        "expected_answers": ["철", "쇠", "아이언"]
+      },
+      {
+        "question_text": "DNA의 이중나선 구조를 밝힌 두 과학자는 누구인가요?",
+        "expected_answers": ["왓슨과 크릭", "제임스 왓슨과 프랜시스 크릭", "왓슨, 크릭"]
+      },
+      {
+        "question_text": "상대성 이론을 발표한 과학자는 누구인가요?",
+        "expected_answers": ["아인슈타인", "알베르트 아인슈타인"]
+      },
+      {
+        "question_text": "사람의 정상 체온은 섭씨 약 몇 도인가요?",
+        "expected_answers": ["36.5도", "약 36.5도", "36도에서 37도 사이"]
+      },
+      {
+        "question_text": "소리의 높낮이를 결정하는 것은 무엇인가요?",
+        "expected_answers": ["진동수", "주파수", "헤르츠로 재는 진동수"]
+      }
+    ]
+  }
+]

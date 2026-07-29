@@ -25,6 +25,39 @@
 | [docs/design/python-backend-rules.md](docs/design/python-backend-rules.md) | 백엔드 설계 규칙 (레이어링, 네이밍, 에러 포맷) |
 | [docs/_templates/](docs/_templates/) | 다음 프로젝트에 복사해 쓰는 마스터 템플릿 |
 
+## 실행
+
+[uv](https://docs.astral.sh/uv/)로 의존성을 관리합니다.
+
+```bash
+uv sync                          # 의존성 설치 (Python 3.12 자동 설치)
+cp .env.example .env             # 환경변수 준비
+uv run python -m scripts.seed    # 퀴즈 세트와 페르소나 시드 로드
+uv run uvicorn app.main:app --reload
+```
+
+API 문서는 http://127.0.0.1:8000/docs 에서 볼 수 있습니다.
+
+```bash
+uv run pytest                    # 테스트
+```
+
 ## 스택
 
-Python 3.12, FastAPI, SQLite(SQLAlchemy), ChromaDB, OpenAI API, promptfoo
+Python 3.12, FastAPI, SQLite(SQLAlchemy + aiosqlite), ChromaDB, OpenAI API, promptfoo
+
+DB 접근을 비동기로 둔 것은 취향이 아니라 요구사항입니다. 이 서버의 병목은 자체 연산이 아니라 외부 LLM API 호출이고, 그 흐름을 동시 인플라이트 상한과 레이트 리미터로 제어하는 것이 이 프로젝트의 과제 중 하나입니다. 요청 경로 중간에 동기 DB 호출이 섞이면 이벤트 루프가 막혀 그 제어가 무의미해집니다.
+
+## 진행 상태
+
+| Phase | 내용 | 상태 |
+|---|---|---|
+| 0, 1 | 프로세스 자산과 설계 문서 | 완료 |
+| 2 | 스캐폴드, 퀴즈/세션 API | 완료 |
+| 3 | 하이브리드 판정 파이프라인 | |
+| 3.5 | 동시성과 레이트 리밋 대응 | |
+| 4 | 페르소나 레이어 | |
+| 5 | 평가 파이프라인 (promptfoo) | |
+| 6, 7 | 배포 구성, 마무리 | |
+
+호스트 멘트(`host_message`)는 페르소나 레이어가 들어오는 Phase 4까지 `null`입니다.

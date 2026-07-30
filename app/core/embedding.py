@@ -50,7 +50,17 @@ async def embed(texts: list[str]) -> list[list[float]]:
         response = await call_guarded(embedding_gate, "embedding", _call)
     except APIError as exc:
         raise EmbeddingUnavailableError(f"임베딩 호출 실패: {exc}") from exc
-    return [item.embedding for item in response.data]  # type: ignore[attr-defined]
+
+    # 응답 순서를 믿지 않고 index로 정렬한다. 응답 항목에 index 필드가 있다는 것
+    # 자체가 배열 순서가 입력 순서와 같다고 보장하지 않는다는 뜻이다.
+    # 여기서 순서가 어긋나면 앵커와 벡터가 뒤바뀌어 저장되는데, 개수는 맞으므로
+    # zip(strict=True)도 통과하고 예외도 나지 않는다. 판정만 조용히 엉망이 된다
+    items = sorted(response.data, key=lambda item: item.index)  # type: ignore[attr-defined]
+    if len(items) != len(texts):
+        raise EmbeddingUnavailableError(
+            f"임베딩 응답 개수가 입력과 다릅니다: 입력 {len(texts)}건, 응답 {len(items)}건"
+        )
+    return [item.embedding for item in items]
 
 
 async def embed_one(text: str) -> list[float]:

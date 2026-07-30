@@ -106,6 +106,18 @@ async def replace_anchors(anchors: list[Anchor]) -> None:
         raise VectorStoreUnavailableError(f"앵커 적재 실패: {exc}") from exc
 
 
+async def count() -> int:
+    """스토어에 실제로 들어 있는 앵커 수.
+
+    시드가 "적재했다"고 말한 수와 이 값을 대조하기 위한 것이다. 둘이 어긋나도
+    조회는 정상 동작하므로 대조하지 않으면 누락을 알아챌 방법이 없다.
+    """
+    try:
+        return await asyncio.to_thread(lambda: _get_collection().count())
+    except Exception as exc:
+        raise VectorStoreUnavailableError(f"앵커 개수 조회 실패: {exc}") from exc
+
+
 async def match(vector: list[float], question_id: int) -> AnchorMatch:
     try:
         return await asyncio.to_thread(_match_sync, vector, question_id)

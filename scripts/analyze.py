@@ -8,7 +8,8 @@
 1. 세 갈래 분기가 **실제로 세 갈래인가.** 분포가 한쪽에 몰려 있으면 전부 LLM으로
    가거나 전부 임베딩으로 확정되고, 그러면 하이브리드를 만든 이유가 사라진다
 2. 임베딩이 **혼자 확정한 판정이 맞았는가.** 여기서 틀리면 LLM이 고칠 기회조차 없다
-3. **margin 조건이 발화하는가.** 한 번도 안 걸리면 그 장치는 없는 것과 같다
+3. **rival이 얼마나 가까워졌는가.** margin 조건은 걷어냈지만 이 수치는 계속 본다.
+   문제가 늘어 주제가 겹치면 rival이 오르고, 그때가 조건을 되살릴 시점이다
 4. 임계값을 **어디로 옮겨야 하는가.** 정확도와 LLM 호출 비율의 교환이다
 
 세 갈래 판정 규칙은 `app/services/judge_service.py`와 같아야 한다.
@@ -31,15 +32,14 @@ EMB_INCORRECT = "embedding_incorrect"
 LLM = "llm"
 
 
-def route(row: dict[str, Any], upper: float, lower: float, margin: float) -> str:
+def route(row: dict[str, Any], upper: float, lower: float) -> str:
     """judge_service.judge와 같은 규칙.
 
     **저쪽을 고치면 여기도 고쳐야 한다.** 두 규칙이 어긋나면 이 분석은
     실제 서비스가 아닌 다른 것을 재게 되고, 그 사실이 드러나지도 않는다.
     """
     sim = row["similarity"]
-    rival = row["rival_similarity"]
-    if sim >= upper and (rival is None or (sim - rival) >= margin):
+    if sim >= upper:
         # 임베딩이 확신해도 부정 표현이 있으면 LLM이 본다
         if negation.has_negation(row["answer"]):
             return LLM
@@ -94,35 +94,46 @@ def distribution(rows: list[dict[str, Any]]) -> None:
         print("  -> 겹치지 않는다. 단일 임계값으로 완전 분리가 가능하다")
 
 
-def margin_check(rows: list[dict[str, Any]], upper: float, margin: float) -> None:
+def rival_watch(rows: list[dict[str, Any]], upper: float) -> None:
+    """rival이 얼마나 올라왔는가. 판정에는 안 쓰지만 계속 지켜본다.
+
+    margin 조건(similarity - rival이 좁으면 LLM으로)은 걷어냈다. 평가셋에서
+    한 번도 발화하지 않았고 근거로 삼던 전제도 반증됐기 때문이다.
+
+    **그래도 이 수치는 봐야 한다.** 문제가 늘어 주제가 겹치기 시작하면
+    rival이 오르고, 그때 조건을 되살릴지 판단해야 한다.
+    """
     print("\n" + "=" * 78)
-    print("2. margin 조건이 발화하는가")
+    print("2. rival 감시 (margin 조건은 제거됨. 되살릴 시점을 보기 위한 지표)")
     print("=" * 78)
+    rivals = [r["rival_similarity"] for r in rows if r["rival_similarity"] is not None]
+    if not rivals:
+        print("  rival 값이 없다")
+        return
     over = [r for r in rows if r["similarity"] >= upper]
-    blocked = [r for r in over if r["margin"] is not None and r["margin"] < margin]
-    print(f"  상한({upper}) 통과: {len(over)}건")
-    print(f"  그중 margin({margin}) 미달로 LLM행: {len(blocked)}건")
-    if not over:
-        print("  ⚠️  상한을 넘긴 항목이 하나도 없다. 상한이 너무 높다")
-    elif not blocked:
-        print("  ⚠️  margin이 한 번도 발화하지 않았다. 이 장치는 지금 없는 것과 같다")
+    near = [
+        r
+        for r in over
+        if r["rival_similarity"] is not None and (r["similarity"] - r["rival_similarity"]) < 0.05
+    ]
+    print(f"  rival 분포:  중앙 {_pct(rivals,0.5):.3f}   95% {_pct(rivals,0.95):.3f}   최대 {max(rivals):.3f}")
+    print(f"  상한({upper}) 통과 {len(over)}건 중 rival이 0.05 이내로 붙은 것: {len(near)}건")
+    if not near:
+        print("  -> 되살릴 근거 없음. 문제들의 주제가 서로 충분히 멀다")
     else:
-        saved = [b for b in blocked if b["label"] == "incorrect"]
-        print(f"  그중 실제 오답: {len(saved)}건  <- margin이 실제로 막아낸 오통과")
-        for b in blocked[:8]:
-            mark = "막음" if b["label"] == "incorrect" else "헛수고"
-            print(f"    [{mark}] s={b['similarity']:.3f} r={b['rival_similarity']:.3f} "
-                  f"m={b['margin']:.3f}  {b['answer'][:34]}")
+        print("  ⚠️  붙기 시작했다. margin 조건 복원을 검토할 것")
+        for r in near[:6]:
+            print(f"      s={r['similarity']:.3f} rival={r['rival_similarity']:.3f}  {r['answer'][:34]}")
 
 
-def confusion(rows: list[dict[str, Any]], upper: float, lower: float, margin: float) -> dict[str, int]:
+def confusion(rows: list[dict[str, Any]], upper: float, lower: float) -> dict[str, int]:
     print("\n" + "=" * 78)
-    print(f"3. 현재 임계값 성적  (upper={upper}, lower={lower}, margin={margin})")
+    print(f"3. 현재 임계값 성적  (upper={upper}, lower={lower})")
     print("=" * 78)
     c = {"fa": 0, "fr": 0, "ok": 0, "llm": 0}
     fa_rows, fr_rows = [], []
     for r in rows:
-        rt = route(r, upper, lower, margin)
+        rt = route(r, upper, lower)
         if rt == LLM:
             c["llm"] += 1
         elif rt == EMB_CORRECT:
@@ -153,14 +164,14 @@ def confusion(rows: list[dict[str, Any]], upper: float, lower: float, margin: fl
         hit = sum(
             1
             for r in banded
-            if (route(r, upper, lower, margin) == LLM) == (r["expected_band"] == "llm_required")
+            if (route(r, upper, lower) == LLM) == (r["expected_band"] == "llm_required")
         )
         print(f"\n  위임 판단 정확도: {hit}/{len(banded)} ({hit/len(banded):.1%})")
         print("  (설계 목표와 실제 경로가 일치한 비율. 정확도와 별개로 '누구에게 맡겼는가'가 옳았는지)")
     return c
 
 
-def sweep(rows: list[dict[str, Any]], margin: float) -> None:
+def sweep(rows: list[dict[str, Any]]) -> None:
     print("\n" + "=" * 78)
     print("4. 임계값 스윕 — false accept 0건을 지키는 가장 싼 조합")
     print("=" * 78)
@@ -174,7 +185,7 @@ def sweep(rows: list[dict[str, Any]], margin: float) -> None:
                 continue
             fa = fr = ok = llm = 0
             for r in rows:
-                rt = route(r, u, lo, margin)
+                rt = route(r, u, lo)
                 if rt == LLM:
                     llm += 1
                 elif rt == EMB_CORRECT:
@@ -233,7 +244,6 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--upper", type=float, default=settings.upper_threshold)
     ap.add_argument("--lower", type=float, default=settings.lower_threshold)
-    ap.add_argument("--margin", type=float, default=settings.min_margin)
     ap.add_argument("--sweep", action="store_true", help="임계값 격자 탐색")
     args = ap.parse_args()
 
@@ -251,10 +261,10 @@ def main() -> None:
         print(f"  ({', '.join(repr(e['answer']) for e in empty[:6])})")
 
     distribution(rows)
-    margin_check(rows, args.upper, args.margin)
-    confusion(rows, args.upper, args.lower, args.margin)
+    rival_watch(rows, args.upper)
+    confusion(rows, args.upper, args.lower)
     if args.sweep:
-        sweep(rows, args.margin)
+        sweep(rows)
     else:
         print("\n임계값 후보를 보려면: uv run python -m scripts.analyze --sweep")
 

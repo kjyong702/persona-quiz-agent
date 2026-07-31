@@ -25,7 +25,6 @@ from app.services import judge_service
 
 UPPER = settings.upper_threshold
 LOWER = settings.lower_threshold
-MARGIN = settings.min_margin
 
 
 @pytest.fixture
@@ -138,7 +137,7 @@ async def test_embedding_result_records_model_and_template(
     assert result.template_version == normalization.TEMPLATE_VERSION
 
 
-# --- 중간 구간과 margin 조건 (LLM 2차) ---
+# --- 중간 구간 (LLM 2차) ---
 
 
 async def test_middle_band_goes_to_llm(
@@ -167,42 +166,31 @@ async def test_just_below_upper_goes_to_llm(
     assert stub.calls.llm == 1
 
 
-async def test_high_similarity_with_narrow_margin_goes_to_llm(
+async def test_rival이_바짝_붙어도_상한만_넘으면_확정한다(
     question: Question, stub: SimpleNamespace
 ) -> None:
-    """상한을 넘겨도 다른 문제 정답과 붙어 있으면 즉시 판정하지 않는다.
+    """margin 조건을 걷어낸 뒤의 동작이다.
 
-    "몰라요" 같은 답변이 모든 문제에서 비슷하게 높은 유사도를 받는 경우가 이것이다.
-    절대 임계값만 두면 그대로 정답 처리된다.
+    예전에는 다른 문제 앵커와 차이가 좁으면 LLM으로 넘겼다. 평가셋에서 한 번도
+    발화하지 않았고 근거로 삼던 전제도 반증되어 제거했다.
+    상세는 docs/notes/threshold-measurement.md.
     """
     stub.state.similarity = UPPER + 0.1
-    stub.state.rival = UPPER + 0.1 - (MARGIN / 2)
-    stub.state.llm_verdict = False
-
-    result = await judge_service.judge(question, "몰라요")
-
-    assert result.judge_method == JudgeMethod.LLM
-    assert result.is_correct is False
-    assert stub.calls.llm == 1
-
-
-async def test_margin_exactly_at_threshold_is_confident(
-    question: Question, stub: SimpleNamespace
-) -> None:
-    """margin 하한도 포함이다 (>= MIN_MARGIN)."""
-    stub.state.similarity = UPPER + 0.1
-    stub.state.rival = UPPER + 0.1 - MARGIN
+    stub.state.rival = UPPER + 0.1 - 0.001  # 거의 붙어 있다
 
     result = await judge_service.judge(question, "서울")
 
     assert result.judge_method == JudgeMethod.EMBEDDING
     assert stub.calls.llm == 0
+    # 판정에 쓰지 않을 뿐 기록은 남긴다. 문제가 늘어 rival이 오르면
+    # 이 값을 보고 조건을 되살릴지 판단한다
+    assert result.rival_similarity == stub.state.rival
 
 
-async def test_no_rival_skips_margin_check(
+async def test_rival이_없어도_정상_동작한다(
     question: Question, stub: SimpleNamespace
 ) -> None:
-    """비교할 다른 문제가 없으면 margin 조건을 적용할 근거가 없다."""
+    """비교할 다른 문제가 없는 경우. 상한만 보므로 영향이 없다."""
     stub.state.similarity = UPPER + 0.05
     stub.state.rival = None
 

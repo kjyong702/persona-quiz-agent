@@ -66,19 +66,28 @@ async def judge(question: Question, answer_text: str) -> JudgeResult:
 
 
 def _is_confident_correct(match: vector_store.AnchorMatch) -> bool:
-    """상한을 넘겼고 다른 문제 정답과도 충분히 벌어졌는가.
+    """상한을 넘겼는가.
 
-    상한만 보면 "몰라요", "네" 같은 짧고 흔한 답변이 통과한다. 그런 답변은
-    이 문제의 정답과 가까운 만큼 다른 문제의 정답과도 가까우므로,
-    두 유사도의 차이를 보면 걸러진다. 차이가 좁으면 LLM으로 넘긴다.
+    **예전에는 조건이 하나 더 있었다.** 다른 문제 앵커와의 차이(margin)가 좁으면
+    확정하지 않고 LLM으로 넘겼다. 근거는 "몰라요" 같은 짧고 흔한 답변이 모든 문제에
+    두루 가까울 테니 차이로 걸러진다는 것이었다.
+
+    **측정으로 두 가지가 드러나 걷어냈다** (docs/notes/threshold-measurement.md).
+
+    1. 평가셋 372건에서 **한 번도 발화하지 않았다.** 상한 통과 131건 중 0건
+    2. 전제가 틀렸다. 회피성 답변의 유사도 중앙값은 0.256으로 **상한 근처에도 못 온다.**
+       하한에서 먼저 끊기므로 margin이 볼 일이 없다
+
+    구조적인 이유가 있다. rival은 **다른 문제** 앵커 중 최고값이라, 발화하려면 한 답변이
+    자기 문제와 남의 문제 앵커에 **동시에** 가까워야 한다. 지금 20문제는 주제가 서로 멀어
+    (수도/행성/왕/대양) rival 중앙값이 0.371에 그친다.
+
+    **rival은 계속 측정한다.** 판정에 쓰지 않을 뿐 기록은 남긴다. 문제가 늘어 주제가
+    겹치기 시작하면 rival이 오르고, 그때가 이 조건을 되살릴 시점이다. 앵커를 58에서
+    121개로 늘렸을 때 이미 0.347 -> 0.371로 움직였다.
     """
     assert match.similarity is not None
-    if match.similarity < settings.upper_threshold:
-        return False
-    if match.rival_similarity is None:
-        # 비교할 다른 문제가 없다. margin 조건을 적용할 근거가 없으므로 통과시킨다
-        return True
-    return (match.similarity - match.rival_similarity) >= settings.min_margin
+    return match.similarity >= settings.upper_threshold
 
 
 async def _match_anchors(answer_text: str, question_id: int) -> vector_store.AnchorMatch:

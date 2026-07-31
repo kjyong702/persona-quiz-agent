@@ -80,10 +80,15 @@ async def test_question_filter_separates_own_and_rival(store: ModuleType) -> Non
     assert match.rival_similarity == pytest.approx(0.0, abs=1e-5)
 
 
-async def test_ambiguous_vector_has_narrow_margin(store: ModuleType) -> None:
-    """두 문제 정답 사이에 걸친 답변은 margin이 좁게 나온다.
+async def test_두_문제_사이에_걸친_벡터는_rival이_바짝_붙는다(store: ModuleType) -> None:
+    """두 문제 정답 사이에 걸친 답변은 similarity와 rival이 거의 같게 나온다.
 
-    "몰라요" 같은 답변을 거르는 근거가 이 수치다.
+    **판정에는 쓰지 않는다.** 예전에는 이 차이(margin)로 확정을 막았는데,
+    평가셋에서 한 번도 발화하지 않아 걷어냈다(threshold-measurement.md).
+
+    그래도 이 수치는 계속 잰다. 문제가 늘어 주제가 겹치면 rival이 오르고,
+    그때 조건을 되살릴지 판단하는 근거가 된다. **여기서 검증하는 것은
+    스토어가 rival을 제대로 계산하는가**이지 판정 규칙이 아니다.
     """
     await store.replace_anchors(
         [_anchor("q1-a0", 1, Q1_VECTOR), _anchor("q2-a0", 2, Q2_VECTOR)]
@@ -93,7 +98,7 @@ async def test_ambiguous_vector_has_narrow_margin(store: ModuleType) -> None:
 
     assert match.similarity == pytest.approx(0.7071, abs=1e-3)
     assert match.rival_similarity == pytest.approx(0.7071, abs=1e-3)
-    assert abs(match.similarity - match.rival_similarity) < settings.min_margin
+    assert abs(match.similarity - match.rival_similarity) < 0.01
 
 
 async def test_takes_best_among_multiple_anchors(store: ModuleType) -> None:

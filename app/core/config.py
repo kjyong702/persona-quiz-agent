@@ -45,9 +45,10 @@ class Settings(BaseSettings):
     # 라벨링 데이터셋으로 정확도와 LLM 호출 비율을 재서 확정한다
     upper_threshold: float = 0.82
     lower_threshold: float = 0.55
-    # 해당 문제 앵커와 다른 문제 앵커의 유사도 차이 하한.
-    # 이 값보다 좁으면 상한을 넘겨도 즉시 정답 처리하지 않고 LLM으로 넘긴다
-    min_margin: float = 0.05
+    # min_margin은 걷어냈다. 평가셋 372건에서 한 번도 발화하지 않았고, 근거로 삼던
+    # 전제("몰라요" 류가 상한을 통과한다)도 반증됐다. 상세는
+    # docs/notes/threshold-measurement.md. rival_similarity는 계속 기록하므로
+    # 문제가 늘어 주제가 겹치면 그 수치를 보고 되살릴 수 있다
 
 
 settings = Settings()

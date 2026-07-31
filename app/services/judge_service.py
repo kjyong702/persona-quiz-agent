@@ -24,6 +24,16 @@ from app.schemas.judge import JudgeResult
 
 
 async def judge(question: Question, answer_text: str) -> JudgeResult:
+    if not normalization.render(answer_text):
+        # 정규화를 거치면 빈 문자열이 되는 답변이다(".", "...", "?" 등).
+        # API의 min_length=1은 통과하지만 render가 끝 문장부호를 지우면 아무것도 안 남는다.
+        #
+        # 이걸 그대로 임베딩에 보내면 400이 나고, 그 400이 ExternalServiceError로
+        # 포장되어 아래 except에 잡힌다. 결과는 같은 폴백이지만 **원인이 외부 장애로
+        # 기록된다.** 제공사는 멀쩡한데 우리가 못 보낼 입력을 보낸 것이다.
+        # 실패율 지표를 오염시키고, 절대 성공할 수 없는 호출에 쿼터를 쓴다
+        return await _judge_by_llm(question, answer_text, JudgeMethod.FALLBACK)
+
     try:
         match = await _match_anchors(answer_text, question.id)
     except ExternalServiceError:

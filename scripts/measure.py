@@ -55,7 +55,13 @@ def _load_cache() -> dict[str, list[float]]:
 async def _embed_all(answers: list[str]) -> dict[str, list[float]]:
     """캐시에 없는 것만 임베딩한다."""
     cache = _load_cache()
-    todo = [a for a in dict.fromkeys(answers) if _cache_key(a) not in cache]
+    # 정규화 후 빈 문자열이 되는 답변은 임베딩에 보내지 않는다. 제공사가 400을 준다.
+    # 판정 경로도 같은 이유로 이런 입력을 임베딩 전에 걷어낸다(judge_service 참고)
+    todo = [
+        a
+        for a in dict.fromkeys(answers)
+        if _cache_key(a) not in cache and normalization.render(a)
+    ]
 
     if todo:
         print(f"임베딩 {len(todo)}건 (캐시 적중 {len(set(answers)) - len(todo)}건)")
@@ -91,7 +97,26 @@ async def main() -> None:
     cache = await _embed_all([r["answer"] for r in rows])
 
     measured = []
+    empty_rendered = 0
     for row in rows:
+        rendered = normalization.render(row["answer"])
+        if not rendered:
+            # 임베딩 경로에 진입조차 못 하는 항목. 실서비스에서도 폴백으로 간다.
+            # 유사도 통계에서 빼되 몇 건인지는 남긴다
+            empty_rendered += 1
+            measured.append(
+                {
+                    **row,
+                    "similarity": None,
+                    "rival_similarity": None,
+                    "margin": None,
+                    "rendered": "",
+                    "rendered_empty": True,
+                    "embedding_model": settings.embedding_model,
+                    "template_version": normalization.TEMPLATE_VERSION,
+                }
+            )
+            continue
         vector = cache[_cache_key(row["answer"])]
         # 판정과 **같은 함수**를 부른다. 여기서 직접 코사인을 계산하면
         # 실제 서비스가 겪는 것(메타데이터 필터, ANN 근사)을 재지 못한다
@@ -104,16 +129,22 @@ async def main() -> None:
                 "similarity": sim,
                 "rival_similarity": rival,
                 "margin": None if (sim is None or rival is None) else sim - rival,
-                "rendered": normalization.render(row["answer"]),
+                "rendered": rendered,
+                "rendered_empty": False,
                 "embedding_model": settings.embedding_model,
                 "template_version": normalization.TEMPLATE_VERSION,
             }
         )
 
-    missing = [m["id"] for m in measured if m["similarity"] is None]
+    # 정규화로 비워진 것이 아닌데 유사도가 없다면 앵커가 없다는 뜻이다.
+    # 시드가 어긋난 상태이므로 결과를 믿으면 안 된다
+    missing = [
+        m["id"] for m in measured if m["similarity"] is None and not m["rendered_empty"]
+    ]
     if missing:
-        # 앵커가 없는 문항이 있다는 뜻이다. 시드가 어긋난 상태이므로 결과를 믿으면 안 된다
         raise SystemExit(f"앵커를 못 찾은 항목이 있습니다(시드 확인 필요): {missing[:10]}")
+    if empty_rendered:
+        print(f"정규화 후 빈 문자열 {empty_rendered}건은 임베딩 경로 진입 불가로 표시했습니다")
 
     OUT.write_text(json.dumps(measured, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"\n측정 완료 -> {OUT.relative_to(ROOT)} ({len(measured)}건)")

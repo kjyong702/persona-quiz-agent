@@ -231,8 +231,16 @@ def main() -> None:
 
     if not SRC.exists():
         raise SystemExit(f"측정값이 없습니다: {SRC}\n먼저 `uv run python -m scripts.measure`")
-    rows = json.loads(SRC.read_text(encoding="utf-8"))
-    print(f"측정값 {len(rows)}건  (모델 {rows[0]['embedding_model']}, 템플릿 {rows[0]['template_version']})")
+    raw = json.loads(SRC.read_text(encoding="utf-8"))
+    # 정규화 후 빈 문자열이 된 항목은 임베딩 경로에 진입조차 못 한다.
+    # 유사도가 없으므로 임계값 계산에서 빼고 따로 센다. 섞으면 분포가 왜곡된다
+    rows = [r for r in raw if not r.get("rendered_empty")]
+    empty = [r for r in raw if r.get("rendered_empty")]
+    print(f"측정값 {len(raw)}건  (모델 {raw[0]['embedding_model']}, 템플릿 {raw[0]['template_version']})")
+    if empty:
+        print(f"  그중 {len(empty)}건은 정규화 후 빈 문자열이라 임베딩 경로 진입 불가 "
+              f"-> 무조건 LLM 폴백. 임계값 계산에서 제외한다")
+        print(f"  ({', '.join(repr(e['answer']) for e in empty[:6])})")
 
     distribution(rows)
     margin_check(rows, args.upper, args.margin)

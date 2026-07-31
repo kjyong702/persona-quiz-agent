@@ -11,7 +11,7 @@
 명확한 구간을 임베딩으로 끊어내고 애매한 구간만 넘기는 것이 이 구조의 이유다.
 """
 
-from app.core import embedding, llm, normalization, vector_store
+from app.core import embedding, llm, negation, normalization, vector_store
 from app.core.config import settings
 from app.core.exceptions import (
     ErrorCode,
@@ -47,6 +47,15 @@ async def judge(question: Question, answer_text: str) -> JudgeResult:
         return await _judge_by_llm(question, answer_text, JudgeMethod.FALLBACK)
 
     if _is_confident_correct(match):
+        if negation.has_negation(answer_text):
+            # 임베딩은 정답이라고 확신했지만 부정 표현이 보인다.
+            # 바이인코더는 "X다"와 "X 아니다"를 못 가른다. 실측에서 부정문 오답이
+            # 유사도 0.926까지 나왔고 정답들보다도 높았다.
+            #
+            # 여기서 오답으로 단정하지 않는 이유는 반어법과 전언 때문이다.
+            # "아니라던데요"는 남의 말을 옮긴 것이라 정답일 수도 있다.
+            # 규칙은 경로만 바꾸고 판정은 LLM이 한다
+            return await _judge_by_llm(question, answer_text, JudgeMethod.LLM, match=match)
         return _embedding_result(is_correct=True, match=match)
 
     if match.similarity <= settings.lower_threshold:

@@ -298,3 +298,82 @@ async def test_llm_failure_in_middle_band_raises(
         await judge_service.judge(question, "서울")
 
     assert exc_info.value.code == ErrorCode.JUDGE_UNAVAILABLE
+
+
+# --- 부정 표현 라우팅 (D안) ---------------------------------------------------
+#
+# 임베딩이 상한을 넘겨 정답을 확신하더라도 부정 표현이 보이면 LLM으로 넘긴다.
+# 바이인코더는 "X다"와 "X 아니다"를 못 가르기 때문이다.
+# **여기서 확인하는 것은 판정 결과가 아니라 어느 경로로 갔는가다.**
+
+
+@pytest.mark.asyncio
+async def test_부정_표현은_상한을_넘겨도_LLM으로_간다(
+    question: Question, stub: SimpleNamespace
+) -> None:
+    stub.state.similarity = 0.95  # 상한을 한참 넘긴다
+    stub.state.llm_verdict = False
+
+    result = await judge_service.judge(question, "서울 아닙니다")
+
+    assert result.judge_method == JudgeMethod.LLM
+    assert stub.calls.llm == 1
+    assert result.is_correct is False
+    # 유사도는 그대로 남긴다. 왜 LLM으로 갔는지 사후에 알 수 있어야 한다
+    assert result.similarity == 0.95
+
+
+@pytest.mark.asyncio
+async def test_받침이_붙은_활용형도_잡는다(
+    question: Question, stub: SimpleNamespace
+) -> None:
+    """`아닙니다`는 문자열 `아니`를 포함하지 않는다. 어간에 받침이 붙어 음절이 바뀐다."""
+    stub.state.similarity = 0.95
+
+    result = await judge_service.judge(question, "서울 아닙니다")
+
+    assert result.judge_method == JudgeMethod.LLM
+    assert stub.calls.llm == 1
+
+
+@pytest.mark.asyncio
+async def test_부정_표현이_없으면_임베딩이_확정한다(
+    question: Question, stub: SimpleNamespace
+) -> None:
+    """규칙이 정상 경로를 건드리지 않는지 본다."""
+    stub.state.similarity = 0.95
+
+    result = await judge_service.judge(question, "서울특별시")
+
+    assert result.judge_method == JudgeMethod.EMBEDDING
+    assert result.is_correct is True
+    assert stub.calls.llm == 0
+
+
+@pytest.mark.asyncio
+async def test_기대_정답의_부정_표현에는_반응하지_않는다(
+    question: Question, stub: SimpleNamespace
+) -> None:
+    """질문이 부정문이라 정답에도 부정 표현이 들어가는 문항이 있다.
+
+    `없`, `않`은 규칙에서 뺐으므로 임베딩 확정 경로가 유지되어야 한다.
+    """
+    stub.state.similarity = 0.95
+
+    result = await judge_service.judge(question, "공기가 없는 곳에서요")
+
+    assert result.judge_method == JudgeMethod.EMBEDDING
+    assert stub.calls.llm == 0
+
+
+@pytest.mark.asyncio
+async def test_상한_아래_부정_표현은_원래대로_LLM_구간이다(
+    question: Question, stub: SimpleNamespace
+) -> None:
+    """규칙은 상한 통과분에만 적용된다. 중간 구간의 동작은 바뀌지 않는다."""
+    stub.state.similarity = 0.70  # 상한과 하한 사이
+
+    result = await judge_service.judge(question, "서울 아닙니다")
+
+    assert result.judge_method == JudgeMethod.LLM
+    assert stub.calls.llm == 1

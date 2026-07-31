@@ -20,6 +20,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from app.core import negation
 from app.core.config import settings
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,10 +32,17 @@ LLM = "llm"
 
 
 def route(row: dict[str, Any], upper: float, lower: float, margin: float) -> str:
-    """judge_service._is_confident_correct와 같은 규칙."""
+    """judge_service.judge와 같은 규칙.
+
+    **저쪽을 고치면 여기도 고쳐야 한다.** 두 규칙이 어긋나면 이 분석은
+    실제 서비스가 아닌 다른 것을 재게 되고, 그 사실이 드러나지도 않는다.
+    """
     sim = row["similarity"]
     rival = row["rival_similarity"]
     if sim >= upper and (rival is None or (sim - rival) >= margin):
+        # 임베딩이 확신해도 부정 표현이 있으면 LLM이 본다
+        if negation.has_negation(row["answer"]):
+            return LLM
         return EMB_CORRECT
     if sim <= lower:
         return EMB_INCORRECT

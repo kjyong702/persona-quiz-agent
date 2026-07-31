@@ -10,6 +10,14 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite+aiosqlite:///./quiz.db"
 
+    # 커넥션 풀. 기본값(5+10)을 그대로 두면 **이 값이 동시 LLM 호출 상한이 된다.**
+    # 요청 스코프 세션이 외부 호출을 기다리는 내내 커넥션을 쥐고 있기 때문이다.
+    # 부하 실험에서 실측했다. 풀 15 / LLM 지연 1.35초 -> 처리량 11.1건/초로
+    # 정확히 묶였고, 동시성을 25에서 120으로 올려도 지연만 3배가 됐다.
+    # 자세한 것은 docs/notes/concurrency.md
+    db_pool_size: int = 20
+    db_max_overflow: int = 40
+
     # --- 외부 API ---
     openai_api_key: str | None = None
     # 모델은 별칭이 아니라 날짜가 박힌 스냅샷으로 고정한다.

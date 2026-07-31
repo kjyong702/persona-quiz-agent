@@ -43,8 +43,19 @@ class Settings(BaseSettings):
     # --- 판정 임계값 ---
     # Phase 5 평가 전의 임시값이다. 여기 적힌 숫자에는 아직 근거가 없고,
     # 라벨링 데이터셋으로 정확도와 LLM 호출 비율을 재서 확정한다
-    upper_threshold: float = 0.82
-    lower_threshold: float = 0.55
+    # 라벨링 평가셋 372건의 실측 분포로 정한 값이다. 근거와 과정은
+    # docs/notes/threshold-measurement.md, 재현은 scripts/analyze.py.
+    #
+    # 기준은 **false accept(오답을 정답으로 확정) 0건**이다. 이 오류는 LLM이
+    # 고칠 기회조차 없어서 LLM 호출 비용으로 살 수 있는 종류가 아니다.
+    # 그 조건에서 false reject까지 0으로 만드는 가장 싼 조합을 골랐고,
+    # 대가는 LLM 위임 66.8%다. 비용보다 정확도를 먼저 둔 선택이다.
+    #
+    # 문항 단위 홀드아웃(`--holdout`)에서 상한은 train과 전체가 0.90으로 일치했다.
+    # 하한은 데이터에 민감해(0.26 vs 0.38) 안전한 쪽인 낮은 값을 택했다.
+    # **처음 보는 문항에서는 FR이 소수 나온다.** "이 데이터에서 0"이지 "항상 0"이 아니다
+    upper_threshold: float = 0.90
+    lower_threshold: float = 0.26
     # min_margin은 걷어냈다. 평가셋 372건에서 한 번도 발화하지 않았고, 근거로 삼던
     # 전제("몰라요" 류가 상한을 통과한다)도 반증됐다. 상세는
     # docs/notes/threshold-measurement.md. rival_similarity는 계속 기록하므로

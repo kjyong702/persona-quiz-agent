@@ -171,6 +171,76 @@ def confusion(rows: list[dict[str, Any]], upper: float, lower: float) -> dict[st
     return c
 
 
+def holdout(rows: list[dict[str, Any]], seed: int = 42) -> None:
+    """문항 단위로 나눠 임계값이 처음 보는 문항에도 통하는지 본다.
+
+    **같은 데이터로 임계값을 고르고 같은 데이터로 성능을 보고하면 과적합이다.**
+    특히 "오류 0건"은 최악 사례 하나가 겨우 통과하도록 맞춘 값이라 가장 위험하다.
+
+    **문항 단위로 나누는 이유**: 무작위로 섞으면 같은 문항의 답변이 양쪽에 들어간다.
+    앵커는 문항마다 공유되므로 그러면 정보가 새고, 검증이 실제보다 좋게 나온다.
+    """
+    import random
+
+    qs = sorted({r["question_id"] for r in rows})
+    rng = random.Random(seed)
+    rng.shuffle(qs)
+    half = len(qs) // 2
+    train_q, test_q = set(qs[:half]), set(qs[half:])
+    tr = [r for r in rows if r["question_id"] in train_q]
+    te = [r for r in rows if r["question_id"] in test_q]
+
+    def pick(subset: list[dict[str, Any]]) -> tuple[float, float] | None:
+        best_g = None
+        for ui in range(41):
+            u = round(0.60 + 0.01 * ui, 2)
+            for li in range(51):
+                lo = round(0.10 + 0.01 * li, 2)
+                if lo >= u:
+                    continue
+                fa = fr = llm = 0
+                for r in subset:
+                    rt = route(r, u, lo)
+                    if rt == LLM:
+                        llm += 1
+                    elif rt == EMB_CORRECT:
+                        fa += r["label"] == "incorrect"
+                    else:
+                        fr += r["label"] == "correct"
+                if fa == 0 and fr == 0 and (best_g is None or llm < best_g[0]):
+                    best_g = (llm, u, lo)
+        return (best_g[1], best_g[2]) if best_g else None
+
+    def grade(subset: list[dict[str, Any]], u: float, lo: float) -> str:
+        fa = fr = llm = 0
+        for r in subset:
+            rt = route(r, u, lo)
+            if rt == LLM:
+                llm += 1
+            elif rt == EMB_CORRECT:
+                fa += r["label"] == "incorrect"
+            else:
+                fr += r["label"] == "correct"
+        return f"FA {fa:>3}  FR {fr:>3}  LLM위임 {llm/len(subset):>6.1%}"
+
+    print("\n" + "=" * 78)
+    print(f"5. 홀드아웃 검증 (문항 단위 분할, seed={seed})")
+    print("=" * 78)
+    print(f"  train 문항 {len(train_q)}개 ({len(tr)}건)  /  test 문항 {len(test_q)}개 ({len(te)}건)")
+    chosen = pick(tr)
+    if chosen is None:
+        print("  train에서 FA=0 FR=0 조합을 찾지 못했다")
+        return
+    u, lo = chosen
+    print(f"\n  train에서 고른 값: upper={u}  lower={lo}")
+    print(f"    train: {grade(tr, u, lo)}")
+    print(f"    test : {grade(te, u, lo)}   <- 처음 보는 문항")
+    print(f"\n  현재 설정값(upper={settings.upper_threshold}, lower={settings.lower_threshold})")
+    print(f"    test : {grade(te, settings.upper_threshold, settings.lower_threshold)}")
+    print("\n  읽는 법: test의 FA가 0을 유지하는지가 핵심이다. FR은 몇 건 늘어날 수 있고,")
+    print("           그건 '이 데이터에서 0'이 '항상 0'을 뜻하지 않는다는 정직한 신호다")
+
+
 def sweep(rows: list[dict[str, Any]]) -> None:
     print("\n" + "=" * 78)
     print("4. 임계값 스윕 — false accept 0건을 지키는 가장 싼 조합")
@@ -245,6 +315,7 @@ def main() -> None:
     ap.add_argument("--upper", type=float, default=settings.upper_threshold)
     ap.add_argument("--lower", type=float, default=settings.lower_threshold)
     ap.add_argument("--sweep", action="store_true", help="임계값 격자 탐색")
+    ap.add_argument("--holdout", action="store_true", help="문항 단위 홀드아웃 검증")
     args = ap.parse_args()
 
     if not SRC.exists():
@@ -263,6 +334,8 @@ def main() -> None:
     distribution(rows)
     rival_watch(rows, args.upper)
     confusion(rows, args.upper, args.lower)
+    if args.holdout:
+        holdout(rows)
     if args.sweep:
         sweep(rows)
     else:

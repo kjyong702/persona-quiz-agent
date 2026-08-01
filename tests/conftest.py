@@ -7,7 +7,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
-from app.core import metrics
+from app.core import llm, metrics
 from app.core.database import Base, get_db
 from app.main import app
 from app.models import JudgeMethod, Persona, Question, QuizSet, SessionAnswer
@@ -17,6 +17,25 @@ from app.models import JudgeMethod, Persona, Question, QuizSet, SessionAnswer
 def reset_metrics() -> None:
     """계측 카운터는 프로세스 전역이라 테스트 사이에 새면 단정이 오염된다."""
     metrics.reset()
+
+
+@pytest.fixture(autouse=True)
+def block_host_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    """진행 멘트 생성을 목으로 막는다. **autouse인 것이 핵심이다.**
+
+    페르소나 레이어를 붙이자 세션 시작, 출제, 답변, 종료 네 지점이 전부
+    LLM을 부르게 됐다. 목을 깜빡한 테스트가 하나라도 있으면 그 테스트는
+    **조용히 실제 API를 호출한다.** 실제로 붙인 직후 전체 테스트가
+    0.8초에서 62초로 늘어나면서 드러났고, 그동안 요금도 나갔다.
+
+    개별 테스트에서 멘트 내용을 검사하고 싶으면 이 fixture를 다시 덮어쓴다.
+    기본값은 "아무것도 나가지 않는다"여야 한다.
+    """
+
+    async def fake(system_prompt: str, user_message: str) -> str:
+        return "[목 진행 멘트]"
+
+    monkeypatch.setattr(llm, "generate_host_message", fake)
 
 
 @pytest_asyncio.fixture

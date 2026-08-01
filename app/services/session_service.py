@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import DomainError, ErrorCode, NotFoundError
 from app.models import Question, QuizSession, SessionStatus
 from app.repositories import persona_repository, quiz_repository, session_repository
+from app.services import persona_service
 from app.schemas.session import (
     AnswerRequest,
     AnswerResult,
@@ -38,8 +39,9 @@ async def start_session(db: AsyncSession, request: SessionCreateRequest) -> Sess
         )
 
     session = await session_repository.create(db, quiz_set.id, persona.id)
-    # 오프닝 멘트는 Phase 4 페르소나 레이어에서 채운다
-    return SessionCreated(session_id=session.id)
+    total = await quiz_repository.count_questions(db, quiz_set.id)
+    host_message = await persona_service.opening_message(persona, total=total)
+    return SessionCreated(session_id=session.id, host_message=host_message)
 
 
 async def get_state(db: AsyncSession, session_id: int) -> SessionState:
@@ -65,7 +67,7 @@ async def next_question(db: AsyncSession, session_id: int) -> NextQuestion:
     if pending is not None:
         # 미답변 문제가 남아 있으면 같은 문제를 다시 준다 (api-spec 멱등 규칙).
         # current_order를 올리지 않으므로 next를 연타해도 문제를 건너뛰지 않는다
-        return _to_response(pending)
+        return await _to_response(db, session, pending)
 
     next_order = session.current_order + 1
     question = await quiz_repository.get_question_by_order(db, session.quiz_set_id, next_order)
@@ -73,12 +75,19 @@ async def next_question(db: AsyncSession, session_id: int) -> NextQuestion:
     if question is None:
         session.status = SessionStatus.FINISHED
         await session_repository.save(db, session)
-        # 마무리 멘트는 Phase 4에서 채운다
-        return NextQuestion(finished=True)
+        persona = await persona_repository.get(db, session.persona_id)
+        host_message = None
+        if persona is not None:
+            score = await session_repository.count_correct(db, session.id)
+            total = await quiz_repository.count_questions(db, session.quiz_set_id)
+            host_message = await persona_service.closing_message(
+                persona, score=score, total=total
+            )
+        return NextQuestion(finished=True, host_message=host_message)
 
     session.current_order = next_order
     await session_repository.save(db, session)
-    return _to_response(question)
+    return await _to_response(db, session, question)
 
 
 async def submit_answer(
@@ -98,12 +107,22 @@ async def submit_answer(
         db, session.id, question.id, request.answer, result
     )
 
+    persona = await persona_repository.get(db, session.persona_id)
+    host_message = None
+    if persona is not None:
+        total = await quiz_repository.count_questions(db, session.quiz_set_id)
+        host_message = await persona_service.reaction_message(
+            persona,
+            is_correct=result.is_correct,
+            order_no=question.order_no,
+            total=total,
+        )
+
     return AnswerResult(
         is_correct=result.is_correct,
         judge_method=result.judge_method,
         similarity=result.similarity,
-        # 리액션 멘트는 Phase 4에서 채운다
-        host_message=None,
+        host_message=host_message,
     )
 
 
@@ -159,12 +178,23 @@ async def _pending_question(db: AsyncSession, session: QuizSession) -> Question 
     return current if answer is None else None
 
 
-def _to_response(question: Question) -> NextQuestion:
+async def _to_response(
+    db: AsyncSession, session: QuizSession, question: Question
+) -> NextQuestion:
+    persona = await persona_repository.get(db, session.persona_id)
+    host_message = None
+    if persona is not None:
+        total = await quiz_repository.count_questions(db, session.quiz_set_id)
+        host_message = await persona_service.question_message(
+            persona,
+            question_text=question.question_text,
+            order_no=question.order_no,
+            total=total,
+        )
     return NextQuestion(
         finished=False,
         question_id=question.id,
         order_no=question.order_no,
         question_text=question.question_text,
-        # 출제 멘트는 Phase 4에서 채운다
-        host_message=None,
+        host_message=host_message,
     )

@@ -36,8 +36,8 @@ async def test_start_session_creates_session(
     )
 
     assert created.session_id > 0
-    # 오프닝 멘트는 Phase 4에서 채운다
-    assert created.host_message is None
+    # Phase 4에서 페르소나가 오프닝을 만든다 (conftest가 목으로 고정)
+    assert created.host_message == "[목 진행 멘트]"
 
     state = await session_service.get_state(db, created.session_id)
     assert state.status == SessionStatus.IN_PROGRESS

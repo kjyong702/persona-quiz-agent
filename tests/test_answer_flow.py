@@ -59,7 +59,7 @@ async def test_answer_records_judgement_evidence(
 
     assert result.is_correct is True
     assert result.judge_method == JudgeMethod.EMBEDDING
-    assert result.host_message is None  # Phase 4에서 채운다
+    assert result.host_message == "[목 진행 멘트]"  # Phase 4 리액션
 
     stored = (await db.execute(select(SessionAnswer))).scalars().all()
     assert len(stored) == 1

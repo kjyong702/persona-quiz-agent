@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     judge_model: str = "gpt-4o-mini-2024-07-18"
     llm_timeout_seconds: float = 20.0
 
+    # 진행 멘트는 판정과 설정이 반대다. 판정은 재현성이 전부라 temperature 0이고,
+    # 멘트는 매번 같은 문장이면 녹음기처럼 들려서 흔들림을 남긴다
+    host_temperature: float = 0.8
+    host_max_tokens: int = 200
+
     chroma_path: str = "./.chroma"
 
     # --- 나가는 호출 흐름 제어 ---
@@ -49,8 +54,6 @@ class Settings(BaseSettings):
     retry_max_delay: float = 20.0
 
     # --- 판정 임계값 ---
-    # Phase 5 평가 전의 임시값이다. 여기 적힌 숫자에는 아직 근거가 없고,
-    # 라벨링 데이터셋으로 정확도와 LLM 호출 비율을 재서 확정한다
     # 라벨링 평가셋 372건의 실측 분포로 정한 값이다. 근거와 과정은
     # docs/notes/threshold-measurement.md, 재현은 scripts/analyze.py.
     #

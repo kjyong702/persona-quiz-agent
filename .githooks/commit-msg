@@ -1,0 +1,111 @@
+#!/usr/bin/env python3
+"""커밋 메시지가 CLAUDE.md Part 3의 규약을 지키는지 검사한다.
+
+**왜 훅으로 강제하는가**
+
+이 리포를 공개한 뒤 커밋 22개 중 14개에 AI 공동저자 표기가 들어가 있는 것을
+발견해 히스토리를 재작성하고 force push로 정리한 적이 있다. 규칙을 어긴 게
+아니라 **규칙이 문서에만 있고 강제되지 않아서** 생긴 일이다.
+
+문서에 적힌 규칙은 사람이 잊는다. 되돌리는 비용이 쓰는 비용보다 훨씬 크므로
+커밋 시점에 막는다.
+
+**설치**
+
+    git config core.hooksPath .githooks
+
+`.git/hooks/`가 아니라 추적되는 `.githooks/`에 두는 이유는 그쪽이 버전 관리
+대상이 아니어서 클론한 사람에게 따라가지 않기 때문이다.
+"""
+
+import re
+import sys
+from pathlib import Path
+
+# 제목에 붙이는 종류. CLAUDE.md Part 3와 같아야 한다
+TYPES = ("feat", "fix", "refactor", "docs", "data", "test", "config", "chore")
+
+# 자동 생성 커밋은 형식을 강제하지 않는다
+EXEMPT_PREFIXES = ("Merge ", "Revert ", "fixup!", "squash!")
+
+EMOJI = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F000-\U0001F2FF⬀-⯿️]"
+)
+
+
+def check(message: str) -> list[str]:
+    """규약 위반 목록. 비어 있으면 통과."""
+    lines = [ln for ln in message.splitlines() if not ln.startswith("#")]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines:
+        return ["커밋 메시지가 비어 있습니다"]
+
+    subject, body = lines[0], "\n".join(lines[1:])
+    problems = []
+
+    if subject.startswith(EXEMPT_PREFIXES):
+        return []
+
+    # 1) AI 공동저자 표기. 이 리포는 공개 포트폴리오다
+    if re.search(r"^\s*Co-Authored-By:", message, re.M | re.I):
+        problems.append(
+            "AI 공동저자 표기(Co-Authored-By)가 있습니다.\n"
+            "      도구로 무엇을 쓰든 설계와 판단의 책임자는 작성자입니다."
+        )
+
+    # 2) 자기를 3인칭으로 부르는 표현. 작성자가 제3자처럼 읽힌다
+    for word in ("사용자 판단", "사용자 확인", "사용자 지적", "사용자 요청",
+                 "요청에 따라", "지시대로", "지시에 따라"):
+        if word in message:
+            problems.append(
+                f"자기를 3인칭으로 부르는 표현이 있습니다: {word!r}\n"
+                "      한국어 커밋은 주어를 생략하는 것이 자연스럽습니다."
+            )
+
+    # 3) 마크다운 문법. 커밋은 평문이라 기호가 그대로 보인다
+    if "**" in message:
+        problems.append(
+            "마크다운 굵게 표기(**)가 있습니다.\n"
+            "      커밋 메시지는 평문이라 기호가 그대로 노출됩니다."
+        )
+
+    # 4) 제목 형식
+    if not re.match(rf"^({'|'.join(TYPES)}): .+", subject):
+        problems.append(
+            f"제목이 'type: 요약' 형식이 아닙니다: {subject[:40]!r}\n"
+            f"      쓸 수 있는 type: {', '.join(TYPES)}"
+        )
+
+    # 5) 제목의 이모지. 본문에서 build-log의 분류 표기를 가리킬 때는 허용한다
+    if EMOJI.search(subject):
+        problems.append("제목에 이모지가 있습니다. 제목은 평문으로 씁니다.")
+
+    # 6) 제목과 본문 사이 빈 줄. git이 요약을 잘라내는 기준이다
+    if len(lines) > 1 and lines[1].strip():
+        problems.append("제목과 본문 사이에 빈 줄이 필요합니다.")
+
+    return problems
+
+
+def main() -> int:
+    if len(sys.argv) < 2:
+        return 0
+    message = Path(sys.argv[1]).read_text(encoding="utf-8")
+    problems = check(message)
+    if not problems:
+        return 0
+
+    print("\n커밋 규약 위반 (CLAUDE.md Part 3)\n", file=sys.stderr)
+    for i, p in enumerate(problems, 1):
+        print(f"  {i}. {p}", file=sys.stderr)
+    print(
+        "\n메시지를 고쳐 다시 커밋하세요."
+        "\n의도한 예외라면 --no-verify로 건너뛸 수 있습니다.\n",
+        file=sys.stderr,
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

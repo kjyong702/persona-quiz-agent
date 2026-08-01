@@ -209,6 +209,71 @@ async def scale_test() -> None:
     print("\n  확실한 것은 B(프리픽스 앞에 변동 값)뿐이다. 그건 매번 0이 나온다.")
 
 
+async def ab_test() -> None:
+    """A와 C를 제대로 갈라내는 재실험.
+
+    **앞선 실험이 결론을 못 낸 이유 두 가지를 고쳤다.**
+
+    1. **표본 부족.** 페르소나 10종에 3회씩이면 이론 격차가 30%p인데
+       최선 노력 캐싱의 편차에 묻혔다. 20종에 2회씩으로 바꾸면 이론상
+       A 97% 대 C 50%로 격차가 47%p가 되어 노이즈를 넘는다
+    2. **시점이 달랐다.** A를 다 돌리고 C를 돌리면 서로 다른 시간대에
+       측정된다. 캐시 상태가 시간에 따라 변하면 그게 조건 차이로 잡힌다.
+       **두 조건을 번갈아 호출해** 같은 시간대를 겪게 한다
+
+    이론 예측 (페르소나 N종, 각 M회)
+
+        A: 맨 처음 한 번만 미스        -> (N*M - 1) / (N*M)
+        C: 페르소나마다 첫 호출 미스    -> (M - 1) / M
+    """
+    N, M = 20, 2
+    nonce = f"{int(time.time()) % 100000:05d}"
+    personas = _synthetic(N, nonce)
+
+    print("\n\n" + "=" * 80)
+    print(f"재실험 — A와 C를 번갈아 호출 (페르소나 {N}종 x {M}회, 실행 식별자 {nonce})")
+    print("=" * 80)
+    print(f"  이론 예측:  A {(N*M-1)/(N*M):.0%}   C {(M-1)/M:.0%}")
+    print()
+
+    totals = {"A": [0, 0], "C": [0, 0]}  # [입력, 적중]
+    session_id = 9000
+    async with httpx.AsyncClient(timeout=60) as client:
+        for rnd in range(M):
+            for p in personas:
+                for cond in ("A", "C"):
+                    session_id += 1
+                    pt, ct = await _call(
+                        client,
+                        build(cond, p, session_id),
+                        persona_prompt.build_user_message(
+                            persona_prompt.QUESTION,
+                            question_text="대한민국의 수도는 어디인가요?",
+                            order_no=rnd + 1,
+                            total=10,
+                        ),
+                    )
+                    totals[cond][0] += pt
+                    totals[cond][1] += ct
+
+    print(f"{'조건':<28}{'호출':>6}{'입력토큰':>11}{'캐시적중':>11}{'적중률':>9}")
+    print("-" * 80)
+    for cond, label in (("A", "A 정상   [프리픽스][델타]"), ("C", "C 뒤집기 [델타][프리픽스]")):
+        tin, tc = totals[cond]
+        print(f"{label:<28}{N*M:>6}{tin:>11,}{tc:>11,}{tc/tin:>8.1%}")
+
+    ra = totals["A"][1] / totals["A"][0]
+    rc = totals["C"][1] / totals["C"][0]
+    print(f"\n  실측 격차: {ra-rc:+.1%}p")
+    if ra - rc > 0.15:
+        print("  -> 가설대로다. 프리픽스를 앞에 두면 캐시 엔트리 하나를 전부가 공유한다.")
+        print("     뒤집으면 페르소나마다 엔트리가 따로 필요해 첫 호출이 매번 미스다.")
+    elif abs(ra - rc) <= 0.15:
+        print("  -> 격차가 이론 예측(47%p)에 한참 못 미친다. 가설이 틀렸거나")
+        print("     최선 노력 캐싱의 편차가 여전히 지배적이다.")
+    else:
+        print("  -> C가 오히려 낫다. 캐싱 동작에 대한 이해를 다시 봐야 한다.")
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
-    asyncio.run(scale_test())
+    asyncio.run(ab_test())

@@ -61,15 +61,28 @@ async def create_answer(
         # 비용은 두 번 났다. 실행 자체를 막으려면 판정 전에 자리를 선점해야 한다.
         # 상세는 docs/notes/duplicate-submit.md
         await db.rollback()
-        _log.warning(
-            "answer.duplicate",
-            session_id=session_id,
-            question_id=question_id,
-        )
         existing = await get_answer(db, session_id, question_id)
         if existing is None:
             # 제약이 걸렸는데 조회가 비었다. 다른 제약이 깨진 것이므로 삼키지 않는다
             raise
+
+        # **중복 제출은 공짜 재현 실험이다.** 같은 답변을 두 번 판정한 것이므로
+        # 두 판정이 다르면 그것이 비결정성의 실제 관측이다. Phase 5에서 266건을
+        # 세 번씩 돌려 유료로 잰 것이 운영에서는 저절로 생긴다.
+        #
+        # **다르다는 사실만 남기고 결과는 바꾸지 않는다.** 먼저 저장된 것이 진실이다.
+        # 사용자가 같은 답을 보내고 다른 점수를 받는 쪽이 더 나쁘다
+        verdict_changed = existing.is_correct != result.is_correct
+        _log.warning(
+            "answer.duplicate",
+            session_id=session_id,
+            question_id=question_id,
+            verdict_changed=verdict_changed,
+            stored_is_correct=existing.is_correct,
+            discarded_is_correct=result.is_correct,
+            stored_method=existing.judge_method,
+            discarded_method=result.judge_method,
+        )
         return existing
     await db.refresh(answer)
     return answer

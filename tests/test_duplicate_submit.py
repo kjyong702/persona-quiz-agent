@@ -14,6 +14,7 @@ import asyncio
 
 import pytest
 import pytest_asyncio
+import structlog
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import (
@@ -138,3 +139,38 @@ async def test_없는_세션에_답변을_넣으면_거부된다(db: AsyncSessio
     """
     with pytest.raises(IntegrityError):
         await session_repository.create_answer(db, 999, 1, "서울", _result())
+
+
+@pytest.mark.asyncio
+async def test_버려지는_판정이_다르면_그_사실을_남긴다(db: AsyncSession) -> None:
+    """**중복 제출은 공짜 재현 실험이다.**
+
+    같은 답변을 두 번 판정한 것이므로 결과가 다르면 비결정성의 실제 관측이다.
+    Phase 5에서 266건을 세 번씩 돌려 유료로 잰 것이 운영에서는 저절로 생긴다.
+
+    결과는 바꾸지 않는다. 먼저 저장된 것이 진실이고, 로그에만 남긴다.
+    """
+    await session_repository.create_answer(db, 1, 1, "서울", _result(True))
+
+    with structlog.testing.capture_logs() as captured:
+        second = await session_repository.create_answer(db, 1, 1, "서울", _result(False))
+
+    duplicate = [e for e in captured if e.get("event") == "answer.duplicate"]
+    assert len(duplicate) == 1
+    assert duplicate[0]["verdict_changed"] is True
+    assert duplicate[0]["stored_is_correct"] is True
+    assert duplicate[0]["discarded_is_correct"] is False
+    # 판정은 바뀌지 않는다
+    assert second.is_correct is True
+
+
+@pytest.mark.asyncio
+async def test_판정이_같으면_바뀌지_않았다고_남긴다(db: AsyncSession) -> None:
+    """대부분은 이쪽이다. 그래야 `verdict_changed`가 참인 경우를 셀 수 있다."""
+    await session_repository.create_answer(db, 1, 1, "서울", _result(True))
+
+    with structlog.testing.capture_logs() as captured:
+        await session_repository.create_answer(db, 1, 1, "서울", _result(True))
+
+    duplicate = [e for e in captured if e.get("event") == "answer.duplicate"]
+    assert duplicate[0]["verdict_changed"] is False

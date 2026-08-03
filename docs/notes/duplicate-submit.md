@@ -99,6 +99,28 @@ CONSTRAINT uq_session_question UNIQUE (session_id, question_id)
 그 문항이 영영 잠긴다. 지금 규모에서 중복 호출 비용보다 그 복잡도가 크다고 봤다.
 **다만 트래픽이 늘면 이 판단은 뒤집힌다.**
 
+## 중복 제출은 공짜 재현 실험이다
+
+두 번째 요청은 **판정을 통과했는데 저장이 안 된다.** 그 판정 결과는 버려진다.
+
+**버려지기 전에 비교한다.** 같은 답변을 두 번 판정한 것이므로 **결과가 다르면
+그것이 비결정성의 실제 관측**이다. Phase 5에서 266건을 세 번씩 돌려 유료로 잰
+그것이 운영에서는 저절로 생긴다.
+
+```
+[warning] answer.duplicate
+  verdict_changed=true  stored_is_correct=true  discarded_is_correct=false
+  stored_method=embedding  discarded_method=llm
+```
+
+**다르다는 사실만 남기고 결과는 바꾸지 않는다.** 먼저 저장된 것이 진실이다.
+`judge_method`까지 남기는 이유는 **경로가 달라서 갈렸을 수 있기 때문**이다.
+한 번은 임베딩이 확정하고 한 번은 LLM으로 갔다면 그건 유사도가 임계값 경계에
+있다는 뜻이라 원인이 다르다.
+
+> 판정과 유니크 제약은 **직렬로 놓인 두 관문이 아니다.** 판정은 답이 맞았는지를,
+> 제약은 데이터가 유효한지를 본다. 서로 다른 축이고 판정 결과와 무관하게 걸린다.
+
 ## SQLite 외래키는 기본이 꺼져 있다
 
 `ForeignKey`를 선언해도 SQLite는 **검사하지 않는다.** PRAGMA로 켜야 한다.

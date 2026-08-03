@@ -19,11 +19,14 @@ from tenacity import AsyncRetrying, retry_if_exception, stop_after_attempt
 from tenacity.wait import wait_base, wait_exponential_jitter
 
 from app.core import metrics
+from app.core import log
 from app.core.config import settings
 from app.core.rate_limit import OutboundGate
 
 T = TypeVar("T")
 
+
+_log = log.get(__name__)
 
 def retry_after_seconds(exc: BaseException) -> float | None:
     """응답 헤더에서 제공사가 알려준 대기 시간을 꺼낸다.
@@ -42,13 +45,17 @@ def retry_after_seconds(exc: BaseException) -> float | None:
         try:
             return max(0.0, float(raw_ms) / 1000.0)
         except ValueError:
-            pass
+            # 제공사가 규격 밖 값을 보냈다. 우리 백오프로 물러나면 되지만
+            # **조용히 넘어가면 헤더가 바뀐 것을 영영 모른다**
+            _log.warning("retry.header_unparsable", header="retry-after-ms", raw=raw_ms)
 
     raw = headers.get("retry-after")
     if raw is not None:
         try:
             return max(0.0, float(raw))
         except ValueError:
+            # HTTP 날짜 형식일 수 있다. 지금은 초 단위만 다룬다
+            _log.warning("retry.header_unparsable", header="retry-after", raw=raw)
             return None
 
     return None

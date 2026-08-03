@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     # 비용은 환경변수 조회 한 번이지만, 기본은 5분으로 둔다
     credential_ttl_seconds: float = 300.0
 
+    # 로깅. 프로덕션은 JSON이어야 수집기가 파싱한다.
+    # 개발에서 읽기 힘들면 LOG_JSON=false로 끈다
+    log_json: bool = True
+    log_level: str = "INFO"
+
     chroma_path: str = "./.chroma"
 
     # --- 나가는 호출 흐름 제어 ---

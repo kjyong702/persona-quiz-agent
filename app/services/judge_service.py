@@ -11,7 +11,17 @@
 명확한 구간을 임베딩으로 끊어내고 애매한 구간만 넘기는 것이 이 구조의 이유다.
 """
 
-from app.core import embedding, llm, negation, normalization, vector_store
+import time
+
+from app.core import (
+    embedding,
+    llm,
+    log,
+    negation,
+    normalization,
+    prompts,
+    vector_store,
+)
 from app.core.config import settings
 from app.core.exceptions import (
     ErrorCode,
@@ -24,7 +34,36 @@ from app.models import JudgeMethod, Question
 from app.schemas.judge import JudgeResult
 
 
+_log = log.get(__name__)
+
+
 async def judge(question: Question, answer_text: str) -> JudgeResult:
+    """판정 하나의 전체 이야기를 로그 한 줄로 남긴다.
+
+    답변 원문은 남기지 않는다. 사용자 입력이고 로그는 평문으로 여러 곳에 복제된다.
+    어느 경로로 갔고 유사도가 얼마였는지만 있으면 비용과 품질 추적에는 충분하다.
+    """
+    started = time.perf_counter()
+    result = await _judge(question, answer_text)
+    _log.info(
+        "judge.completed",
+        question_id=question.id,
+        method=result.judge_method,
+        is_correct=result.is_correct,
+        similarity=result.similarity,
+        rival_similarity=result.rival_similarity,
+        embedding_model=result.embedding_model,
+        template_version=result.template_version,
+        # **프롬프트 버전을 남기는 것이 핵심이다.** 프롬프트는 코드와 다른 주기로
+        # 바뀌므로 커밋 해시만으로는 어느 버전이 그 판정을 냈는지 알 수 없다
+        judge_prompt=prompts.JUDGE_PROMPT,
+        judge_model=settings.judge_model,
+        duration_ms=round((time.perf_counter() - started) * 1000, 1),
+    )
+    return result
+
+
+async def _judge(question: Question, answer_text: str) -> JudgeResult:
     if not normalization.render(answer_text):
         # 정규화를 거치면 빈 문자열이 되는 답변이다(".", "...", "?" 등).
         # API의 min_length=1은 통과하지만 render가 끝 문장부호를 지우면 아무것도 안 남는다.
@@ -33,11 +72,13 @@ async def judge(question: Question, answer_text: str) -> JudgeResult:
         # 포장되어 아래 except에 잡힌다. 결과는 같은 폴백이지만 **원인이 외부 장애로
         # 기록된다.** 제공사는 멀쩡한데 우리가 못 보낼 입력을 보낸 것이다.
         # 실패율 지표를 오염시키고, 절대 성공할 수 없는 호출에 쿼터를 쓴다
+        _log.warning("judge.fallback", reason="empty_after_normalization")
         return await _judge_by_llm(question, answer_text, JudgeMethod.FALLBACK)
 
     try:
         match = await _match_anchors(answer_text, question.id)
     except IndexDriftError as exc:
+        _log.error("judge.index_drift", detail=str(exc))
         # **여기는 폴백하지 않는다.** 아래 except보다 먼저 잡는 이유가 그것이다.
         # IndexDriftError도 ExternalServiceError라서 순서를 바꾸면 조용히 LLM으로
         # 넘어가고, 인덱스가 깨진 채로 서비스가 계속 돈다. 막으려던 바로 그 상황이다.
@@ -47,12 +88,19 @@ async def judge(question: Question, answer_text: str) -> JudgeResult:
         raise ServiceUnavailableError(ErrorCode.INDEX_DRIFT, str(exc)) from exc
     except ExternalServiceError:
         # 임베딩이나 벡터 조회가 죽어도 판정 자체는 계속되어야 한다.
-        # 외부 하나가 끊겼다고 퀴즈 진행이 멈추면 그게 더 큰 실패다
+        # 외부 하나가 끊겼다고 퀴즈 진행이 멈추면 그게 더 큰 실패다.
+        #
+        # **다만 흔적은 남긴다.** 여기서 조용히 넘어가면 밖에서는 아무 일도 없어
+        # 보이고, 나중에 "왜 그날 LLM 비용이 두 배였지"를 답할 근거가 사라진다.
+        # exc_info로 원래 예외의 트레이스백까지 넣는다
+        _log.warning("judge.fallback", reason="embedding_unavailable", exc_info=True)
         return await _judge_by_llm(question, answer_text, JudgeMethod.FALLBACK)
 
     if match.similarity is None:
         # 이 문제의 앵커가 스토어에 없다. 시드 임베딩을 돌리지 않았거나
-        # 문제가 나중에 추가된 경우다. 비교할 축이 없으니 LLM에 맡긴다
+        # 문제가 나중에 추가된 경우다. 비교할 축이 없으니 LLM에 맡긴다.
+        # **설정 실수일 가능성이 높은 자리라 반드시 남긴다**
+        _log.warning("judge.fallback", reason="no_anchor", question_id=question.id)
         return await _judge_by_llm(question, answer_text, JudgeMethod.FALLBACK)
 
     if _is_confident_correct(match):

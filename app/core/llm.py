@@ -7,11 +7,13 @@ import math
 
 from openai import APIError, AsyncOpenAI
 
-from app.core import credentials, metrics, prompts
+from app.core import credentials, log, metrics, prompts
 from app.core.config import settings
 from app.core.exceptions import LLMUnavailableError
 from app.core.rate_limit import llm_gate
 from app.core.retry import call_guarded
+
+_log = log.get(__name__)
 
 _clients = credentials.RefreshableClient[AsyncOpenAI](
     name="llm",
@@ -71,6 +73,9 @@ def correct_probability(response: object) -> float | None:
     try:
         top = response.choices[0].logprobs.content[0].top_logprobs  # type: ignore[attr-defined]
     except (AttributeError, IndexError, TypeError):
+        # 응답 모양이 바뀌었거나 logprobs가 안 왔다. 판정 자체는 계속되지만
+        # **불안정 관측이 통째로 죽은 상태**라 지표가 0으로 보인다. 남겨야 안다
+        _log.warning("judge.logprobs_unavailable", exc_info=True)
         return None
     total = 0.0
     for candidate in top:

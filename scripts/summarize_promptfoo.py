@@ -30,11 +30,22 @@ def main() -> None:
         version = row.get("prompt", {}).get("label", "?")
         case = row["testCase"].get("description") or row["vars"]["answer"]
         runs[(version, case)].append(row["success"])
-        meta[case] = {
-            "answer": row["vars"]["answer"],
-            "category": row["vars"]["category"],
-            "label": row["testCase"]["assert"][0]["value"],
-        }
+        # 판정 평가와 페르소나 평가는 vars 모양이 다르다. 공통으로 쓸 수 있게
+        # 있는 것만 담고, 깨진 검사는 assert의 metric으로 식별한다
+        v = row["vars"]
+        broken = [
+            c.get("assertion", {}).get("metric")
+            for c in (row.get("gradingResult") or {}).get("componentResults", [])
+            if not c.get("pass")
+        ]
+        meta.setdefault(case, {
+            "subject": v.get("answer") or f"{v.get('persona_name','')}/{v.get('situation','')}",
+            "category": v.get("category") or v.get("situation", ""),
+            # 판정 평가는 기대 라벨이 곧 오류 종류(FA/FR)를 가른다. 없으면 빈 값
+            "label": (row["testCase"].get("assert") or [{}])[0].get("value", ""),
+            "broken": [],
+        })
+        meta[case]["broken"] = sorted({m for m in (meta[case]["broken"] + broken) if m})
 
     versions = sorted({v for v, _ in runs})
     cases = sorted({c for _, c in runs})
@@ -54,7 +65,7 @@ def main() -> None:
             m = meta[c]
             failures.append({
                 **m,
-                "kind": "FA" if m["label"] == "incorrect" else "FR",
+                "kind": {"incorrect": "FA", "correct": "FR"}.get(m["label"], "규칙위반"),
                 "flaky": len(set(results)) > 1,
                 "passed": sum(results),
                 "runs": len(results),

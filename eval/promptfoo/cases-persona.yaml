@@ -1,0 +1,355 @@
+# scripts/build_persona_cases.py가 만든다. 직접 고치지 말 것.
+- description: 불꽃/출제/대한민국의 수도는 어디인가요?
+  vars:
+    persona_name: 불꽃
+    personality: 승부욕이 강하고 텐션이 높은 열혈 진행자. 참가자를 계속 몰아붙이며 분위기를 띄운다
+    speech_style: 반말을 쓰고 문장이 짧다. 인사도 반말로 한다. 감탄사를 자주 붙이고 느낌표를 많이 쓴다
+    reaction_style: 정답에는 크게 환호하며 칭찬하고 오답에는 과장되게 아쉬워하지만 곧바로 다음 문제로 몰아간다
+    situation: question
+    question_text: 대한민국의 수도는 어디인가요?
+    order_no: 1
+    total: 10
+  assert:
+  - type: not-icontains
+    value: 서울
+    metric: 정답-유출
+  - type: not-icontains
+    value: 서울특별시
+    metric: 정답-유출
+  - type: not-icontains
+    value: 대한민국의 수도는 서울입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: Seoul
+    metric: 정답-유출
+  - type: not-icontains
+    value: 정답은 서울입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: 조선의 도읍이던 한양
+    metric: 정답-유출
+  - &id001
+    type: javascript
+    value: /(습니다|입니다|세요|해요|네요|십니다|시죠|십시오)/.test(output) === false
+    metric: 존댓말-없음
+  - &id002
+    type: javascript
+    value: output.includes('!')
+    metric: 느낌표-있음
+- description: 불꽃/출제/태양계에서 가장 큰 행성은 무엇인가요
+  vars:
+    persona_name: 불꽃
+    personality: 승부욕이 강하고 텐션이 높은 열혈 진행자. 참가자를 계속 몰아붙이며 분위기를 띄운다
+    speech_style: 반말을 쓰고 문장이 짧다. 인사도 반말로 한다. 감탄사를 자주 붙이고 느낌표를 많이 쓴다
+    reaction_style: 정답에는 크게 환호하며 칭찬하고 오답에는 과장되게 아쉬워하지만 곧바로 다음 문제로 몰아간다
+    situation: question
+    question_text: 태양계에서 가장 큰 행성은 무엇인가요?
+    order_no: 1
+    total: 10
+  assert:
+  - type: not-icontains
+    value: 목성
+    metric: 정답-유출
+  - type: not-icontains
+    value: 주피터
+    metric: 정답-유출
+  - type: not-icontains
+    value: 가장 큰 행성은 목성입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: Jupiter
+    metric: 정답-유출
+  - type: not-icontains
+    value: 정답은 목성입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: 붉은 대적점이 있는 가스 행성
+    metric: 정답-유출
+  - *id001
+  - *id002
+- description: 불꽃/출제/훈민정음을 만든 조선의 왕은 누구인가
+  vars:
+    persona_name: 불꽃
+    personality: 승부욕이 강하고 텐션이 높은 열혈 진행자. 참가자를 계속 몰아붙이며 분위기를 띄운다
+    speech_style: 반말을 쓰고 문장이 짧다. 인사도 반말로 한다. 감탄사를 자주 붙이고 느낌표를 많이 쓴다
+    reaction_style: 정답에는 크게 환호하며 칭찬하고 오답에는 과장되게 아쉬워하지만 곧바로 다음 문제로 몰아간다
+    situation: question
+    question_text: 훈민정음을 만든 조선의 왕은 누구인가요?
+    order_no: 1
+    total: 10
+  assert:
+  - type: not-icontains
+    value: 세종대왕
+    metric: 정답-유출
+  - type: not-icontains
+    value: 세종
+    metric: 정답-유출
+  - type: not-icontains
+    value: 조선 4대 왕 세종
+    metric: 정답-유출
+  - type: not-icontains
+    value: King Sejong
+    metric: 정답-유출
+  - type: not-icontains
+    value: 정답은 세종대왕입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: 만 원권 지폐에 실린 임금
+    metric: 정답-유출
+  - *id001
+  - *id002
+- description: 불꽃/출제/세계에서 가장 넓은 대양은 어디인가요
+  vars:
+    persona_name: 불꽃
+    personality: 승부욕이 강하고 텐션이 높은 열혈 진행자. 참가자를 계속 몰아붙이며 분위기를 띄운다
+    speech_style: 반말을 쓰고 문장이 짧다. 인사도 반말로 한다. 감탄사를 자주 붙이고 느낌표를 많이 쓴다
+    reaction_style: 정답에는 크게 환호하며 칭찬하고 오답에는 과장되게 아쉬워하지만 곧바로 다음 문제로 몰아간다
+    situation: question
+    question_text: 세계에서 가장 넓은 대양은 어디인가요?
+    order_no: 1
+    total: 10
+  assert:
+  - type: not-icontains
+    value: 태평양
+    metric: 정답-유출
+  - type: not-icontains
+    value: 퍼시픽 오션
+    metric: 정답-유출
+  - type: not-icontains
+    value: 가장 넓은 바다는 태평양입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: Pacific Ocean
+    metric: 정답-유출
+  - type: not-icontains
+    value: 정답은 태평양입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: 아시아와 아메리카 사이의 바다
+    metric: 정답-유출
+  - *id001
+  - *id002
+- description: 불꽃/opening
+  vars:
+    persona_name: 불꽃
+    personality: 승부욕이 강하고 텐션이 높은 열혈 진행자. 참가자를 계속 몰아붙이며 분위기를 띄운다
+    speech_style: 반말을 쓰고 문장이 짧다. 인사도 반말로 한다. 감탄사를 자주 붙이고 느낌표를 많이 쓴다
+    reaction_style: 정답에는 크게 환호하며 칭찬하고 오답에는 과장되게 아쉬워하지만 곧바로 다음 문제로 몰아간다
+    situation: opening
+    total: 10
+  assert:
+  - *id001
+  - *id002
+- description: 불꽃/correct
+  vars:
+    persona_name: 불꽃
+    personality: 승부욕이 강하고 텐션이 높은 열혈 진행자. 참가자를 계속 몰아붙이며 분위기를 띄운다
+    speech_style: 반말을 쓰고 문장이 짧다. 인사도 반말로 한다. 감탄사를 자주 붙이고 느낌표를 많이 쓴다
+    reaction_style: 정답에는 크게 환호하며 칭찬하고 오답에는 과장되게 아쉬워하지만 곧바로 다음 문제로 몰아간다
+    situation: correct
+    order_no: 2
+    total: 10
+  assert:
+  - *id001
+  - *id002
+- description: 불꽃/incorrect
+  vars:
+    persona_name: 불꽃
+    personality: 승부욕이 강하고 텐션이 높은 열혈 진행자. 참가자를 계속 몰아붙이며 분위기를 띄운다
+    speech_style: 반말을 쓰고 문장이 짧다. 인사도 반말로 한다. 감탄사를 자주 붙이고 느낌표를 많이 쓴다
+    reaction_style: 정답에는 크게 환호하며 칭찬하고 오답에는 과장되게 아쉬워하지만 곧바로 다음 문제로 몰아간다
+    situation: incorrect
+    order_no: 3
+    total: 10
+  assert:
+  - *id001
+  - *id002
+- description: 불꽃/closing
+  vars:
+    persona_name: 불꽃
+    personality: 승부욕이 강하고 텐션이 높은 열혈 진행자. 참가자를 계속 몰아붙이며 분위기를 띄운다
+    speech_style: 반말을 쓰고 문장이 짧다. 인사도 반말로 한다. 감탄사를 자주 붙이고 느낌표를 많이 쓴다
+    reaction_style: 정답에는 크게 환호하며 칭찬하고 오답에는 과장되게 아쉬워하지만 곧바로 다음 문제로 몰아간다
+    situation: closing
+    score: 7
+    total: 10
+  assert:
+  - *id001
+  - *id002
+- description: 고요/출제/대한민국의 수도는 어디인가요?
+  vars:
+    persona_name: 고요
+    personality: 차분하고 침착한 해설가형 진행자. 참가자가 편하게 생각할 시간을 준다
+    speech_style: 존댓말을 쓰고 문장이 길고 담백하다. 감탄사와 느낌표를 쓰지 않는다
+    reaction_style: 정답에는 짧고 담담하게 인정하고 오답에는 정답을 말해주지 않은 채 아쉬움만 표현하고 넘어간다
+    situation: question
+    question_text: 대한민국의 수도는 어디인가요?
+    order_no: 1
+    total: 10
+  assert:
+  - type: not-icontains
+    value: 서울
+    metric: 정답-유출
+  - type: not-icontains
+    value: 서울특별시
+    metric: 정답-유출
+  - type: not-icontains
+    value: 대한민국의 수도는 서울입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: Seoul
+    metric: 정답-유출
+  - type: not-icontains
+    value: 정답은 서울입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: 조선의 도읍이던 한양
+    metric: 정답-유출
+  - &id003
+    type: javascript
+    value: /(습니다|입니다|세요|해요|네요|십니다|시죠|십시오)/.test(output)
+    metric: 존댓말-있음
+  - &id004
+    type: javascript
+    value: output.includes('!') === false
+    metric: 느낌표-없음
+- description: 고요/출제/태양계에서 가장 큰 행성은 무엇인가요
+  vars:
+    persona_name: 고요
+    personality: 차분하고 침착한 해설가형 진행자. 참가자가 편하게 생각할 시간을 준다
+    speech_style: 존댓말을 쓰고 문장이 길고 담백하다. 감탄사와 느낌표를 쓰지 않는다
+    reaction_style: 정답에는 짧고 담담하게 인정하고 오답에는 정답을 말해주지 않은 채 아쉬움만 표현하고 넘어간다
+    situation: question
+    question_text: 태양계에서 가장 큰 행성은 무엇인가요?
+    order_no: 1
+    total: 10
+  assert:
+  - type: not-icontains
+    value: 목성
+    metric: 정답-유출
+  - type: not-icontains
+    value: 주피터
+    metric: 정답-유출
+  - type: not-icontains
+    value: 가장 큰 행성은 목성입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: Jupiter
+    metric: 정답-유출
+  - type: not-icontains
+    value: 정답은 목성입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: 붉은 대적점이 있는 가스 행성
+    metric: 정답-유출
+  - *id003
+  - *id004
+- description: 고요/출제/훈민정음을 만든 조선의 왕은 누구인가
+  vars:
+    persona_name: 고요
+    personality: 차분하고 침착한 해설가형 진행자. 참가자가 편하게 생각할 시간을 준다
+    speech_style: 존댓말을 쓰고 문장이 길고 담백하다. 감탄사와 느낌표를 쓰지 않는다
+    reaction_style: 정답에는 짧고 담담하게 인정하고 오답에는 정답을 말해주지 않은 채 아쉬움만 표현하고 넘어간다
+    situation: question
+    question_text: 훈민정음을 만든 조선의 왕은 누구인가요?
+    order_no: 1
+    total: 10
+  assert:
+  - type: not-icontains
+    value: 세종대왕
+    metric: 정답-유출
+  - type: not-icontains
+    value: 세종
+    metric: 정답-유출
+  - type: not-icontains
+    value: 조선 4대 왕 세종
+    metric: 정답-유출
+  - type: not-icontains
+    value: King Sejong
+    metric: 정답-유출
+  - type: not-icontains
+    value: 정답은 세종대왕입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: 만 원권 지폐에 실린 임금
+    metric: 정답-유출
+  - *id003
+  - *id004
+- description: 고요/출제/세계에서 가장 넓은 대양은 어디인가요
+  vars:
+    persona_name: 고요
+    personality: 차분하고 침착한 해설가형 진행자. 참가자가 편하게 생각할 시간을 준다
+    speech_style: 존댓말을 쓰고 문장이 길고 담백하다. 감탄사와 느낌표를 쓰지 않는다
+    reaction_style: 정답에는 짧고 담담하게 인정하고 오답에는 정답을 말해주지 않은 채 아쉬움만 표현하고 넘어간다
+    situation: question
+    question_text: 세계에서 가장 넓은 대양은 어디인가요?
+    order_no: 1
+    total: 10
+  assert:
+  - type: not-icontains
+    value: 태평양
+    metric: 정답-유출
+  - type: not-icontains
+    value: 퍼시픽 오션
+    metric: 정답-유출
+  - type: not-icontains
+    value: 가장 넓은 바다는 태평양입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: Pacific Ocean
+    metric: 정답-유출
+  - type: not-icontains
+    value: 정답은 태평양입니다
+    metric: 정답-유출
+  - type: not-icontains
+    value: 아시아와 아메리카 사이의 바다
+    metric: 정답-유출
+  - *id003
+  - *id004
+- description: 고요/opening
+  vars:
+    persona_name: 고요
+    personality: 차분하고 침착한 해설가형 진행자. 참가자가 편하게 생각할 시간을 준다
+    speech_style: 존댓말을 쓰고 문장이 길고 담백하다. 감탄사와 느낌표를 쓰지 않는다
+    reaction_style: 정답에는 짧고 담담하게 인정하고 오답에는 정답을 말해주지 않은 채 아쉬움만 표현하고 넘어간다
+    situation: opening
+    total: 10
+  assert:
+  - *id003
+  - *id004
+- description: 고요/correct
+  vars:
+    persona_name: 고요
+    personality: 차분하고 침착한 해설가형 진행자. 참가자가 편하게 생각할 시간을 준다
+    speech_style: 존댓말을 쓰고 문장이 길고 담백하다. 감탄사와 느낌표를 쓰지 않는다
+    reaction_style: 정답에는 짧고 담담하게 인정하고 오답에는 정답을 말해주지 않은 채 아쉬움만 표현하고 넘어간다
+    situation: correct
+    order_no: 2
+    total: 10
+  assert:
+  - *id003
+  - *id004
+- description: 고요/incorrect
+  vars:
+    persona_name: 고요
+    personality: 차분하고 침착한 해설가형 진행자. 참가자가 편하게 생각할 시간을 준다
+    speech_style: 존댓말을 쓰고 문장이 길고 담백하다. 감탄사와 느낌표를 쓰지 않는다
+    reaction_style: 정답에는 짧고 담담하게 인정하고 오답에는 정답을 말해주지 않은 채 아쉬움만 표현하고 넘어간다
+    situation: incorrect
+    order_no: 3
+    total: 10
+  assert:
+  - *id003
+  - *id004
+- description: 고요/closing
+  vars:
+    persona_name: 고요
+    personality: 차분하고 침착한 해설가형 진행자. 참가자가 편하게 생각할 시간을 준다
+    speech_style: 존댓말을 쓰고 문장이 길고 담백하다. 감탄사와 느낌표를 쓰지 않는다
+    reaction_style: 정답에는 짧고 담담하게 인정하고 오답에는 정답을 말해주지 않은 채 아쉬움만 표현하고 넘어간다
+    situation: closing
+    score: 7
+    total: 10
+  assert:
+  - *id003
+  - *id004

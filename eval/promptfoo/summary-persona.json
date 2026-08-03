@@ -1,0 +1,24 @@
+{
+  "cases": 16,
+  "versions": {
+    "persona-base.v1": {
+      "passed_per_run": [
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16,
+        16
+      ],
+      "accuracy": 1.0,
+      "fa": 0,
+      "fr": 0,
+      "flaky": 0,
+      "failures": []
+    }
+  }
+}

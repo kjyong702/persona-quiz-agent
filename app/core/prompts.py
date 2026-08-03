@@ -11,7 +11,11 @@ from pathlib import Path
 
 PROMPT_DIR = Path(__file__).resolve().parents[2] / "prompts"
 
-JUDGE_PROMPT = "judge.v1"
+# 운영이 쓰는 판정 프롬프트. v1에서 두 번 올렸고 근거는 실측이다.
+# promptfoo로 위임 경로 266건을 재보니 v1이 94.3%(FA 4, FR 11)였고
+# v3가 97.4%(FA 1, FR 6)다. 무엇을 왜 고쳤는지는 프롬프트 diff와
+# eval/promptfoo/README.md에 있다.
+JUDGE_PROMPT = "judge.v3"
 
 
 @lru_cache(maxsize=None)

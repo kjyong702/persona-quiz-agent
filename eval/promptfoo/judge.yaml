@@ -1,0 +1,47 @@
+# LLM 판정 프롬프트의 정확도.
+#
+#   npx promptfoo@latest eval -c eval/promptfoo/judge.yaml
+#
+# **왜 이것만 promptfoo로 재는가.**
+# 임베딩 유사도 측정은 scripts/measure.py와 analyze.py가 계속 맡는다. 임계값을
+# 정하려면 같은 데이터에 값만 바꿔 수십 번 계산해야 하는데, 그때마다 임베딩을
+# 다시 부르면 값이 미세하게 흔들려 비교가 안 된다. 그래서 한 번 재고 캐시한다.
+# promptfoo는 매 실행이 실제 호출이라 그 용도에는 맞지 않는다.
+#
+# 반대로 여기는 promptfoo의 자리다. 프롬프트를 넣고 LLM 출력을 받아 규칙에
+# 맞는지 보는 일이고, 프롬프트 버전을 나란히 비교하는 것도 이 도구가 한다.
+
+description: 판정 프롬프트 정확도 (LLM 위임 경로)
+
+prompts:
+  # 프롬프트를 여기 베끼지 않는다. 운영 코드를 그대로 부른다.
+  # 이유는 eval/promptfoo/judge_prompt.py 참고
+  - id: file://judge_prompt.py:judge
+    label: judge.v1
+  - id: file://judge_prompt.py:judge_v2
+    label: judge.v2
+  - id: file://judge_prompt.py:judge_v3
+    label: judge.v3
+
+providers:
+  - id: openai:chat:gpt-4o-mini-2024-07-18
+    label: gpt-4o-mini
+    config:
+      # 운영과 같은 값이어야 한다. 판정은 재현성이 전부라 temperature 0이고,
+      # max_tokens 5는 "correct 또는 incorrect 한 단어"라는 지시의 물리적 강제다
+      temperature: 0
+      max_tokens: 5
+
+defaultTest:
+  options:
+    # app/core/llm.py의 parse_verdict와 같은 순서로 본다.
+    # incorrect를 먼저 봐야 한다. correct로 먼저 검사하면 incorrect가
+    # correct를 포함해서 오답이 정답으로 뒤집힌다
+    transform: |
+      const s = String(output).trim().toLowerCase().replace(/^[`"' .]+|[`"' .]+$/g, "");
+      return s.startsWith("incorrect") ? "incorrect"
+        : s.startsWith("correct") ? "correct"
+        : "unparseable";
+
+# scripts/build_promptfoo_cases.py가 만든다
+tests: file://cases-judge.yaml

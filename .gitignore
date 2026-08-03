@@ -7,3 +7,4 @@ __pycache__/
 node_modules/
 .promptfoo/
 .DS_Store
+eval/promptfoo/results-*.json

@@ -1,6 +1,6 @@
 """LLM 판정 클라이언트.
 
-임베딩만으로 가릴 수 없는 답변을 판정한다. 프롬프트는 prompts/judge.v1.txt.
+임베딩만으로 가릴 수 없는 답변을 판정한다. 프롬프트는 prompts/ 아래 버전 파일이고 어느 것을 쓰는지는 prompts.JUDGE_PROMPT가 정한다.
 """
 
 from openai import APIError, AsyncOpenAI

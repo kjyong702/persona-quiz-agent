@@ -85,9 +85,26 @@ judge.completed
 
 ## structlog을 고른 이유
 
-표준 라이브러리 `logging`으로도 JSON 출력은 만들 수 있다. 그래도 `structlog`을
-쓴 이유는 **이전 회사에서 호출마다 토큰과 지연을 structlog로 남기던 방식과 같기
-때문**이다. 같은 도구를 쓰면 그때 익힌 것이 그대로 이어진다.
+표준 라이브러리 `logging`으로도 JSON은 만들 수 있다. `logging.Formatter`를 상속해
+`format()`에서 `json.dumps`를 부르면 된다. 그래도 `structlog`을 쓴 이유가 셋이다.
+
+**첫째, 값을 키워드로 넘긴다.**
+
+```python
+logging.info("판정 완료 method=%s similarity=%s", method, sim)   # 문자열을 조립
+_log.info("judge.completed", method=method, similarity=sim)      # 값을 그대로
+```
+
+앞은 사람이 읽을 문장을 만들고 나중에 파싱해야 한다. 뒤는 처음부터 구조다.
+**필드를 추가해도 문자열 포맷을 안 건드린다.**
+
+**둘째, `contextvars`를 프로세서로 지원한다.** 요청 ID를 한 번 심으면 이후 모든
+로그에 자동으로 붙는다. 표준 라이브러리로 하려면 `LogRecord`에 필드를 넣는
+필터를 직접 만들어야 한다.
+
+**셋째, 프로세서 체인이 리스트다.** 타임스탬프, 로그 레벨, 예외 트레이스백,
+JSON 렌더링이 순서 있는 함수 목록이라 **무엇이 어떤 순서로 붙는지가 코드에 보인다.**
+`format_exc_info`를 넣고 빼는 것으로 트레이스백 포함 여부가 갈린다.
 
 모듈 이름은 `app/core/log.py`다. `logging.py`로 지으면 표준 라이브러리와 헷갈린다.
 같은 파일에서 둘 다 쓰기 때문에 이름이 겹치면 읽는 사람이 매번 멈춘다.

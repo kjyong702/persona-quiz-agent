@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import DateTime, event
+from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -14,9 +15,52 @@ class Base(DeclarativeBase):
     pass
 
 
+class UtcDateTime(TypeDecorator):
+    """UTC로 저장하고 UTC로 돌려주는 datetime.
+
+    **`DateTime(timezone=True)`만으로는 SQLite에서 지켜지지 않는다.**
+    SQLite에 datetime 타입이 없어서 문자열로 저장되는데, 그 문자열에
+    시간대 표시가 안 들어간다. 그래서 다시 읽으면 tzinfo가 사라진다.
+
+        넣을 때     2026-08-03 17:46:06 tzinfo=UTC
+        DB 저장값   '2026-08-03 17:46:06.999397'    <- 시간대 표시 없음
+        다시 읽으면 2026-08-03 17:46:06 tzinfo=None <- 사라졌다
+
+    **조용히 틀리지 않고 시끄럽게 터지는 종류라 그나마 낫다.**
+    naive와 aware를 비교하면 파이썬이 TypeError를 낸다. 그래도 세션 만료 시각을
+    계산하거나 응답으로 직렬화할 때 터지므로 미리 막는다.
+
+    Postgres로 옮기면 `TIMESTAMPTZ`가 있어서 이 래퍼가 필요 없어진다.
+    다만 있어도 해가 없으므로 그대로 두면 된다.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect: object) -> datetime | None:
+        """저장 직전. tzinfo가 없으면 UTC로 간주하고, 있으면 UTC로 변환한다."""
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+    def process_result_value(self, value: datetime | None, dialect: object) -> datetime | None:
+        """읽은 직후. 시간대가 없으면 UTC를 붙인다.
+
+        저장할 때 UTC로 바꿔뒀으므로 이 값은 UTC가 맞다.
+        **DB가 시간대를 안 알려주니 우리가 아는 사실을 되돌려주는 것이다.**
+        """
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
+
+
 class TimestampMixin:
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        UtcDateTime,
         default=lambda: datetime.now(UTC),
     )
 

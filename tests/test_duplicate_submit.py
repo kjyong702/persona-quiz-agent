@@ -174,3 +174,26 @@ async def test_판정이_같으면_바뀌지_않았다고_남긴다(db: AsyncSes
 
     duplicate = [e for e in captured if e.get("event") == "answer.duplicate"]
     assert duplicate[0]["verdict_changed"] is False
+
+
+@pytest.mark.asyncio
+async def test_시간대가_왕복해도_유지된다(
+    db: AsyncSession, db_engine: AsyncEngine
+) -> None:
+    """`DateTime(timezone=True)`만으로는 SQLite에서 안 지켜진다.
+
+    SQLite에 datetime 타입이 없어 문자열로 저장되는데 시간대 표시가 안 들어간다.
+    naive와 aware를 비교하면 TypeError가 나므로 세션 만료 계산이나 직렬화에서 터진다.
+    """
+    from datetime import UTC, datetime
+
+    await session_repository.create_answer(db, 1, 1, "서울", _result())
+
+    maker = async_sessionmaker(db_engine, class_=AsyncSession, expire_on_commit=False)
+    async with maker() as fresh:   # 새 세션이어야 실제로 DB에서 읽는다
+        stored = await session_repository.get_answer(fresh, 1, 1)
+
+    assert stored is not None
+    assert stored.created_at.tzinfo is not None, "시간대가 사라졌다"
+    # 비교가 되어야 한다. 안 되면 TypeError가 난다
+    assert stored.created_at <= datetime.now(UTC)

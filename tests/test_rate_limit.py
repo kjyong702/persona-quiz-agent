@@ -158,3 +158,44 @@ async def test_gate_records_throttle_wait() -> None:
 
     waits = metrics.snapshot()["waits"]
     assert waits["test.throttle_wait_seconds"]["count"] >= 1
+
+
+@pytest.mark.asyncio
+async def test_기본_capacity는_초당_충전량과_같다() -> None:
+    """**이름과 실제 동작이 다른 자리라 테스트로 못박아둔다.**
+
+    "분당 300건"으로 읽으면 한 번에 300건이 나갈 것 같지만 버스트는 5건이다.
+    제공사 한도가 분당으로 표시돼도 짧은 구간의 몰림에 429가 나므로
+    고르게 내보내는 편이 안전하다. 실수가 아니라 의도다.
+    """
+    now = [0.0]
+
+    async def fake_sleep(seconds: float) -> None:
+        now[0] += seconds
+
+    bucket = TokenBucket(rate_per_minute=300, clock=lambda: now[0], sleep=fake_sleep)
+
+    # 처음 5건은 미리 찬 토큰으로 즉시 나간다
+    for _ in range(5):
+        assert await bucket.acquire() == 0.0
+    assert now[0] == 0.0
+
+    # 그 다음부터는 초당 5건 속도로 고르게 나간다
+    for _ in range(5):
+        await bucket.acquire()
+    assert now[0] == pytest.approx(1.0, abs=0.01)
+
+
+@pytest.mark.asyncio
+async def test_capacity를_명시하면_버스트가_늘어난다() -> None:
+    now = [0.0]
+
+    async def fake_sleep(seconds: float) -> None:
+        now[0] += seconds
+
+    bucket = TokenBucket(
+        rate_per_minute=300, capacity=50, clock=lambda: now[0], sleep=fake_sleep
+    )
+    for _ in range(50):
+        assert await bucket.acquire() == 0.0
+    assert now[0] == 0.0, "capacity만큼은 기다리지 않아야 한다"

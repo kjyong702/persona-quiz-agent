@@ -175,8 +175,9 @@ LLM 호출은 외부 유료 API에 의존하므로 병목이 우리 서버가 �
 부정문과 패러프레이즈를 **동시에** 해결한다. 한국어 특화 임베딩(KURE 등)은
 패러프레이즈만 개선하고 부정은 구조 문제라 그대로다.
 
-한국어 자원은 실재한다. `KLUE-NLI`가 약 3만 문장쌍으로
-`entailment / contradiction / neutral`을 제공하고 `KorNLI`에 베이스라인이 공개돼 있다.
+한국어 자원은 실재한다. `KLUE-NLI`는 30,998 문장쌍(dev/test 각 3,000)으로
+`entailment / contradiction / neutral`을 제공한다. `KorNLI`도 있지만 **학습셋이
+영어 NLI를 기계번역한 것**이라 품질 기준으로 삼기에는 KLUE 쪽이 낫다.
 
 ### 어떻게 판단할 것인가
 

@@ -11,6 +11,7 @@ class ErrorCode:
     SESSION_FINISHED = "SESSION_FINISHED"
     NO_ACTIVE_QUESTION = "NO_ACTIVE_QUESTION"
     JUDGE_UNAVAILABLE = "JUDGE_UNAVAILABLE"
+    INDEX_DRIFT = "INDEX_DRIFT"
 
 
 class AppError(Exception):
@@ -58,3 +59,16 @@ class VectorStoreUnavailableError(ExternalServiceError):
 
 class LLMUnavailableError(ExternalServiceError):
     pass
+
+
+class IndexDriftError(ExternalServiceError):
+    """인덱스가 지금 설정과 다른 모델이나 템플릿으로 만들어졌다.
+
+    **다른 ExternalServiceError와 성격이 다르다.** 나머지는 일시적 장애라
+    재시도하거나 다른 경로로 갈 수 있지만, 이건 재시도해도 낫지 않는 구성 오류다.
+    사람이 `scripts.seed`를 다시 돌려야 풀린다.
+
+    폴백하지 않고 멈추는 이유는 조용히 틀리는 쪽이 더 나쁘기 때문이다.
+    임베딩 공간이 다르면 유사도는 계산되지만 의미가 없다. 값이 나오므로
+    아무도 알아채지 못한 채 임계값 판정이 계속 틀린다.
+    """

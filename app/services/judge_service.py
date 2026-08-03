@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.core.exceptions import (
     ErrorCode,
     ExternalServiceError,
+    IndexDriftError,
     LLMUnavailableError,
     ServiceUnavailableError,
 )
@@ -36,6 +37,14 @@ async def judge(question: Question, answer_text: str) -> JudgeResult:
 
     try:
         match = await _match_anchors(answer_text, question.id)
+    except IndexDriftError as exc:
+        # **여기는 폴백하지 않는다.** 아래 except보다 먼저 잡는 이유가 그것이다.
+        # IndexDriftError도 ExternalServiceError라서 순서를 바꾸면 조용히 LLM으로
+        # 넘어가고, 인덱스가 깨진 채로 서비스가 계속 돈다. 막으려던 바로 그 상황이다.
+        #
+        # 다른 외부 장애는 일시적이라 다른 경로로 가는 것이 맞지만 이건 구성 오류다.
+        # 재시도해도 낫지 않고 사람이 다시 적재해야 풀린다
+        raise ServiceUnavailableError(ErrorCode.INDEX_DRIFT, str(exc)) from exc
     except ExternalServiceError:
         # 임베딩이나 벡터 조회가 죽어도 판정 자체는 계속되어야 한다.
         # 외부 하나가 끊겼다고 퀴즈 진행이 멈추면 그게 더 큰 실패다

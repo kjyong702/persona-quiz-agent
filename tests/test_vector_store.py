@@ -11,8 +11,13 @@ from types import ModuleType
 
 import pytest
 
-from app.core import embedding, llm, vector_store
+from app.core import embedding, llm, normalization, vector_store
 from app.core.config import settings
+from app.core.exceptions import (
+    ErrorCode,
+    IndexDriftError,
+    ServiceUnavailableError,
+)
 from app.models import JudgeMethod, Question
 from app.services import judge_service
 
@@ -196,3 +201,91 @@ async def test_replace_clears_previous_anchors(store: ModuleType) -> None:
     match = await store.match(Q1_VECTOR, question_id=1)
 
     assert match.similarity is None
+
+
+# --- 인덱스 드리프트 ---
+#
+# 저장된 벡터와 질의 벡터가 다른 모델이나 다른 정규화 템플릿에서 나오면
+# 유사도는 계산되지만 의미가 없다. **차원이 같으면 예외도 안 난다.**
+# text-embedding-ada-002와 3-small은 둘 다 1536이고 3-large도 1536으로 줄일 수 있어서
+# 실제로 갈아끼울 수 있는 조합이 존재한다.
+
+
+@pytest.mark.asyncio
+async def test_모델이_바뀌면_판정을_멈춘다(
+    store: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    await store.replace_anchors([_anchor("a1", 1, Q1_VECTOR)])
+
+    # 인덱스를 만든 뒤 설정만 바꾼다. 실제로는 .env를 고치고 재배포한 상황이다
+    monkeypatch.setattr(settings, "embedding_model", "text-embedding-ada-002")
+    monkeypatch.setattr(store, "_client", None)
+
+    with pytest.raises(IndexDriftError) as exc:
+        await store.match(Q1_VECTOR, question_id=1)
+    assert "text-embedding-ada-002" in str(exc.value)
+
+
+@pytest.mark.asyncio
+async def test_정규화_템플릿이_바뀌어도_멈춘다(
+    store: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """모델보다 이쪽이 더 자주 바뀐다. 정규화 규칙 한 줄 고치기가 훨씬 쉽다."""
+    await store.replace_anchors([_anchor("a1", 1, Q1_VECTOR)])
+
+    monkeypatch.setattr(normalization, "TEMPLATE_VERSION", "norm-v2")
+    monkeypatch.setattr(store, "_client", None)
+
+    with pytest.raises(IndexDriftError):
+        await store.match(Q1_VECTOR, question_id=1)
+
+
+@pytest.mark.asyncio
+async def test_설정이_그대로면_통과한다(store: ModuleType) -> None:
+    """검사가 항상 막기만 하면 방어가 아니라 고장이다."""
+    await store.replace_anchors([_anchor("a1", 1, Q1_VECTOR)])
+    assert (await store.match(Q1_VECTOR, question_id=1)).similarity == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_다시_적재하면_풀린다(
+    store: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """드리프트의 해법은 재적재다. 그 경로가 실제로 도장을 새로 찍는지 본다."""
+    await store.replace_anchors([_anchor("a1", 1, Q1_VECTOR)])
+    monkeypatch.setattr(settings, "embedding_model", "text-embedding-ada-002")
+    monkeypatch.setattr(store, "_client", None)
+    with pytest.raises(IndexDriftError):
+        await store.match(Q1_VECTOR, question_id=1)
+
+    await store.replace_anchors([_anchor("a1", 1, Q1_VECTOR)])
+    assert (await store.match(Q1_VECTOR, question_id=1)).similarity == pytest.approx(1.0)
+
+
+@pytest.mark.asyncio
+async def test_드리프트는_LLM으로_폴백되지_않는다(
+    store: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**이 테스트가 이 기능의 핵심이다.**
+
+    IndexDriftError는 ExternalServiceError를 물려받는다. judge_service가 그것을
+    일반 외부 장애와 같이 잡으면 조용히 LLM으로 넘어가고, 인덱스가 깨진 채로
+    서비스가 계속 돈다. 막으려던 바로 그 상황이 된다.
+    """
+
+    async def forbidden(*args: object, **kwargs: object) -> bool:
+        raise AssertionError("드리프트인데 LLM을 불렀다. 조용히 계속 도는 상황이다")
+
+    await store.replace_anchors([_anchor("a1", 1, Q1_VECTOR)])
+    monkeypatch.setattr(settings, "embedding_model", "text-embedding-ada-002")
+    monkeypatch.setattr(store, "_client", None)
+
+    async def fake_embed_one(text: str) -> list[float]:
+        return Q1_VECTOR
+
+    monkeypatch.setattr(embedding, "embed_one", fake_embed_one)
+    monkeypatch.setattr(llm, "judge_answer", forbidden)
+
+    with pytest.raises(ServiceUnavailableError) as exc:
+        await judge_service.judge(_question(), "서울")
+    assert exc.value.code == ErrorCode.INDEX_DRIFT

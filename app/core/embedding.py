@@ -7,28 +7,33 @@
 
 from openai import APIError, AsyncOpenAI
 
+from app.core import credentials
 from app.core.config import settings
 from app.core.exceptions import EmbeddingUnavailableError
 from app.core.rate_limit import embedding_gate
 from app.core.retry import call_guarded
 
-_client: AsyncOpenAI | None = None
+_clients = credentials.RefreshableClient[AsyncOpenAI](
+    name="embedding",
+    ttl_seconds=settings.credential_ttl_seconds,
+    build=lambda key: AsyncOpenAI(
+        api_key=key,
+        timeout=settings.llm_timeout_seconds,
+        # SDK 자체 재시도를 끄고 우리가 관리한다. SDK가 안에서 몰래
+        # 다시 걸면 그 요청은 세마포어와 레이트 리미터를 거치지 않고 나가서
+        # 흐름 제어에 구멍이 생기고, 계측 숫자도 실제 호출 수와 어긋난다
+        max_retries=0,
+    ),
+)
 
 
 def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        if not settings.openai_api_key:
-            raise EmbeddingUnavailableError("OPENAI_API_KEY가 설정되지 않았습니다")
-        _client = AsyncOpenAI(
-            api_key=settings.openai_api_key,
-            timeout=settings.llm_timeout_seconds,
-            # SDK 자체 재시도를 끄고 우리가 관리한다. SDK가 안에서 몰래
-            # 다시 걸면 그 요청은 세마포어와 레이트 리미터를 거치지 않고 나가서
-            # 흐름 제어에 구멍이 생기고, 계측 숫자도 실제 호출 수와 어긋난다
-            max_retries=0,
-        )
-    return _client
+    """판정 쪽과 같은 이유로 자격증명을 다시 읽는다. app/core/credentials.py 참고.
+
+    **두 모듈이 각자 클라이언트를 들고 있으므로 한쪽만 고치면 안 된다.**
+    임베딩만 새 키로 가고 판정은 옛 키로 가면 절반만 살아 있는 상태가 된다.
+    """
+    return _clients.get(EmbeddingUnavailableError)
 
 
 async def embed(texts: list[str]) -> list[list[float]]:

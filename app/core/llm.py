@@ -7,27 +7,31 @@ import math
 
 from openai import APIError, AsyncOpenAI
 
-from app.core import metrics, prompts
+from app.core import credentials, metrics, prompts
 from app.core.config import settings
 from app.core.exceptions import LLMUnavailableError
 from app.core.rate_limit import llm_gate
 from app.core.retry import call_guarded
 
-_client: AsyncOpenAI | None = None
+_clients = credentials.RefreshableClient[AsyncOpenAI](
+    name="llm",
+    ttl_seconds=settings.credential_ttl_seconds,
+    build=lambda key: AsyncOpenAI(
+        api_key=key,
+        timeout=settings.llm_timeout_seconds,
+        # SDK 자체 재시도를 끄고 우리가 관리한다 (app/core/retry.py 참고)
+        max_retries=0,
+    ),
+)
 
 
 def _get_client() -> AsyncOpenAI:
-    global _client
-    if _client is None:
-        if not settings.openai_api_key:
-            raise LLMUnavailableError("OPENAI_API_KEY가 설정되지 않았습니다")
-        _client = AsyncOpenAI(
-            api_key=settings.openai_api_key,
-            timeout=settings.llm_timeout_seconds,
-            # SDK 자체 재시도를 끄고 우리가 관리한다 (app/core/retry.py 참고)
-            max_retries=0,
-        )
-    return _client
+    """키가 회전되면 다음 TTL 경계에서 새 클라이언트로 바뀐다.
+
+    예전에는 첫 호출에 만든 클라이언트를 프로세스 내내 재사용했다. 키를
+    회전시켜도 재배포 전까지 반영되지 않았다. 근거는 app/core/credentials.py
+    """
+    return _clients.get(LLMUnavailableError)
 
 
 def build_user_message(

@@ -57,6 +57,11 @@ class Settings(BaseSettings):
     host_temperature: float = 0.8
     host_max_tokens: int = 200
 
+    # 자격증명을 다시 읽는 주기. 근거는 app/core/credentials.py 문서 문자열.
+    # 0으로 두면 매 호출마다 환경을 읽는다. 값이 같으면 클라이언트는 재사용하므로
+    # 비용은 환경변수 조회 한 번이지만, 기본은 5분으로 둔다
+    credential_ttl_seconds: float = 300.0
+
     chroma_path: str = "./.chroma"
 
     # --- 나가는 호출 흐름 제어 ---

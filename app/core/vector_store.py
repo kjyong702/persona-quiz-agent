@@ -67,11 +67,12 @@ def _get_collection() -> chromadb.Collection:
         # 코사인으로 고정한다. 기본값(L2)이면 유사도 = 1 - 거리 환산이 성립하지 않는다
         metadata={
             "hnsw:space": "cosine",
-            # 어떤 모델과 어떤 정규화 템플릿으로 만든 인덱스인지 남긴다.
-            # **이미 있는 컬렉션에는 이 값이 반영되지 않는다.** Chroma의
-            # get_or_create_collection은 컬렉션이 있으면 넘긴 metadata를 무시하고
-            # 기존 것을 그대로 준다(1.5.9에서 확인). 그래서 이 도장은 처음
-            # 만들어질 때의 값으로 고정되고, 그것이 바로 우리가 알고 싶은 값이다
+            # 참고용이다. **대조에는 쓰지 않는다.**
+            # get_or_create_collection은 컬렉션이 이미 있으면 넘긴 metadata를
+            # 무시하므로(1.5.9에서 확인), 도장을 넣는 코드를 나중에 추가하면
+            # 기존 인덱스에는 영영 안 찍힌다. 실제로 그렇게 만들었다가
+            # 실제 인덱스에서 검사가 통과해버리는 것을 보고 알았다.
+            # 대조는 레코드 metadata로 한다(_stamp_mismatch 참고)
             _STAMP_MODEL: settings.embedding_model,
             _STAMP_TEMPLATE: normalization.TEMPLATE_VERSION,
         },
@@ -81,14 +82,29 @@ def _get_collection() -> chromadb.Collection:
 def _stamp_mismatch(collection: chromadb.Collection) -> tuple[str, str] | None:
     """인덱스 도장이 지금 설정과 어긋나면 (기대, 실제)를 준다.
 
-    도장이 아예 없으면 이 검사가 생기기 전에 만든 인덱스다. 그때는 판단할 근거가
-    없으므로 어긋났다고 보지 않는다. 다시 적재하면 도장이 찍힌다.
+    **컬렉션 metadata가 아니라 레코드에서 읽는다.** 처음에는 컬렉션 metadata에
+    도장을 찍었는데 작동하지 않았다. Chroma의 `get_or_create_collection`은
+    컬렉션이 이미 있으면 넘긴 metadata를 무시하므로, **도장을 넣는 코드를 나중에
+    추가하면 기존 인덱스에는 영영 안 찍힌다.** 단위 테스트는 매번 새 컬렉션을
+    만들어서 이걸 못 잡았고, 실제 인덱스로 돌려보고 나서야 드러났다.
+
+    레코드 metadata는 `replace_anchors`가 매번 새로 쓰므로 항상 최신이다.
+    그리고 **이 필드들은 처음부터 있었다.** 기록만 하고 아무도 안 읽었을 뿐이다.
+
+    레코드가 없으면 비교할 대상이 없다. 그건 드리프트가 아니라 미적재이고
+    `/readyz`가 따로 본다.
     """
-    stored = collection.metadata or {}
+    result = collection.get(limit=1, include=["metadatas"])
+    metadatas = result.get("metadatas") or []
+    if not metadatas:
+        return None
+
+    stored = metadatas[0] or {}
     expected = f"{settings.embedding_model}/{normalization.TEMPLATE_VERSION}"
     model = stored.get(_STAMP_MODEL)
     template = stored.get(_STAMP_TEMPLATE)
     if model is None and template is None:
+        # 도장이 없는 레코드다. 이 검사가 생기기 전 형식이라 판단할 근거가 없다
         return None
     actual = f"{model}/{template}"
     return None if actual == expected else (expected, actual)
@@ -121,11 +137,19 @@ def _replace_anchors_sync(anchors: list[Anchor]) -> None:
     collection = _get_collection()
     if not anchors:
         return
+    # **도장은 저장소가 찍는다.** 호출자에게 맡기면 어딘가는 빠진다.
+    # 실제로 seed는 넣고 테스트는 안 넣어서, 테스트가 도장 없는 인덱스를 만들고
+    # 드리프트 검사가 항상 통과하는 상태였다. 기억해야 지켜지는 규칙은
+    # 언젠가 안 지켜진다
+    stamp = {
+        _STAMP_MODEL: settings.embedding_model,
+        _STAMP_TEMPLATE: normalization.TEMPLATE_VERSION,
+    }
     collection.add(
         ids=[a.id for a in anchors],
         embeddings=[a.embedding for a in anchors],
         documents=[a.document for a in anchors],
-        metadatas=[a.metadata for a in anchors],
+        metadatas=[{**a.metadata, **stamp} for a in anchors],
     )
 
 
@@ -178,3 +202,19 @@ async def match(vector: list[float], question_id: int) -> AnchorMatch:
         raise
     except Exception as exc:
         raise VectorStoreUnavailableError(f"앵커 조회 실패: {exc}") from exc
+
+
+async def stamp_mismatch() -> tuple[str, str] | None:
+    """헬스체크가 쓰는 도장 대조. 어긋나면 (기대, 실제)를 준다.
+
+    `match()`는 어긋나면 예외를 던지는데 헬스체크는 던지면 안 된다.
+    상태를 응답 본문에 담아야 무엇이 어긋났는지 보인다.
+    """
+
+    def _check() -> tuple[str, str] | None:
+        return _stamp_mismatch(_get_collection())
+
+    try:
+        return await asyncio.to_thread(_check)
+    except Exception as exc:  # 스토어 자체가 죽었으면 드리프트로 보고하지 않는다
+        raise VectorStoreUnavailableError(f"도장 조회 실패: {exc}") from exc

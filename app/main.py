@@ -1,3 +1,4 @@
+import asyncio
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -10,12 +11,33 @@ from app import models  # noqa: F401  create_all이 테이블을 알려면 모�
 from app.core import credentials, log, prompts
 from app.core.config import settings
 from app.core.database import Base, engine
-from app.core.exceptions import AppError
-from app.routers import metrics, personas, quiz_sets, sessions
+from app.core.exceptions import AppError, ErrorCode
+from app.routers import health, metrics, personas, quiz_sets, sessions
 
 
 log.configure(json_output=settings.log_json, level=settings.log_level)
 _log = log.get(__name__)
+
+
+def _warn_if_retry_budget_exceeds_request_timeout() -> None:
+    """재시도 예산이 요청 상한을 넘으면 재시도가 끝까지 못 간다.
+
+    설정 두 개가 따로 있으면 서로 모순되는 값으로 두기 쉽다. 넘는 것 자체는
+    잘못이 아니지만(요청 상한이 바깥 경계다) **재시도 횟수가 설정값만큼 안 도는
+    것을 모르는 채 쓰는 것**이 문제다. 부팅 때 알려준다.
+    """
+    delays = sum(
+        min(settings.retry_initial_delay * (2**i), settings.retry_max_delay)
+        for i in range(settings.retry_max_attempts - 1)
+    )
+    budget = settings.retry_max_attempts * settings.llm_timeout_seconds + delays
+    if budget > settings.request_timeout_seconds:
+        _log.warning(
+            "config.retry_budget_exceeds_timeout",
+            retry_budget_seconds=round(budget, 1),
+            request_timeout_seconds=settings.request_timeout_seconds,
+            detail="재시도가 설정된 횟수만큼 돌기 전에 요청이 끊긴다",
+        )
 
 
 @asynccontextmanager
@@ -35,7 +57,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         lower_threshold=settings.lower_threshold,
         # 키 자체는 절대 안 남긴다. 지문이면 회전 여부를 구분하기에 충분하다
         api_key_fingerprint=credentials.fingerprint(credentials.current_api_key()),
+        request_timeout_seconds=settings.request_timeout_seconds,
     )
+    _warn_if_retry_budget_exceeds_request_timeout()
     yield
 
 
@@ -59,7 +83,33 @@ async def attach_request_id(request: Request, call_next: Any) -> Any:
         log.set_request_id(request_id)
 
     started = time.perf_counter()
-    response = await call_next(request)
+    try:
+        async with asyncio.timeout(settings.request_timeout_seconds):
+            response = await call_next(request)
+    except TimeoutError:
+        # **여기서 취소가 전파된다.** asyncio.timeout이 안쪽 태스크를 취소하므로
+        # 진행 중이던 LLM 호출도 같이 끊긴다. 프록시가 먼저 끊었다면 클라이언트만
+        # 떠나고 이 호출은 계속 돌면서 돈을 썼을 것이다
+        duration_ms = round((time.perf_counter() - started) * 1000, 1)
+        _log.error(
+            "http.timeout",
+            method=request.method,
+            path=request.url.path,
+            duration_ms=duration_ms,
+            limit_seconds=settings.request_timeout_seconds,
+        )
+        return JSONResponse(
+            status_code=504,
+            content={
+                "data": None,
+                "error": {
+                    "code": ErrorCode.REQUEST_TIMEOUT,
+                    "message": "처리 시간이 초과되었습니다",
+                },
+            },
+            headers={"X-Request-ID": request_id},
+        )
+
     _log.info(
         "http.request",
         method=request.method,
@@ -84,6 +134,7 @@ async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
     )
 
 
+app.include_router(health.router)
 app.include_router(metrics.router)
 app.include_router(personas.router)
 app.include_router(quiz_sets.router)

@@ -1,0 +1,15 @@
+# 시크릿
+.env
+# 데이터. 볼륨으로 붙인다
+*.db
+.chroma/
+# 개발 부산물
+.venv/
+__pycache__/
+*.pyc
+.git/
+.pytest_cache/
+node_modules/
+eval/.embedding-cache.json
+eval/promptfoo/results-*.json
+tests/

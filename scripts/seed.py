@@ -75,8 +75,8 @@ async def _load_anchors() -> int:
                 "question_id": question_id,
                 "quiz_set_id": quiz_set_id,
                 "raw_text": raw_text,
-                "embedding_model": settings.embedding_model,
-                "template_version": normalization.TEMPLATE_VERSION,
+                # embedding_model과 template_version은 vector_store가 찍는다.
+                # 여기서 손으로 넣으면 호출자마다 빠뜨릴 수 있다
             },
         )
         for (anchor_id, question_id, quiz_set_id, raw_text), document, vector in zip(

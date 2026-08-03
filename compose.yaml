@@ -1,0 +1,27 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      # 시크릿은 이미지가 아니라 여기로 들어온다. 값을 파일에 적지 않고
+      # 셸 환경에서 넘긴다. compose는 값이 없으면 빈 문자열을 넣으므로
+      # /readyz가 api_key=none으로 잡아낸다
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?OPENAI_API_KEY를 환경에 설정하세요}
+      DATABASE_URL: sqlite+aiosqlite:////data/quiz.db
+      CHROMA_PATH: /data/chroma
+      LOG_JSON: "true"
+    volumes:
+      # **없으면 재시작할 때마다 앵커가 사라진다.** SQLite와 Chroma 둘 다
+      # 파일이라 컨테이너 레이어에 쓰이고, 컨테이너를 새로 만들면 날아간다.
+      # 그러면 판정이 전부 LLM 폴백으로 가서 비용이 몇 배가 된다
+      - quiz-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  quiz-data:

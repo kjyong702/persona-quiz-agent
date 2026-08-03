@@ -1,0 +1,116 @@
+{
+  "cases": 19,
+  "versions": {
+    "judge.v3": {
+      "passed_per_run": [
+        12,
+        12,
+        13,
+        12,
+        12,
+        13,
+        14,
+        13,
+        11,
+        13,
+        12,
+        13,
+        12,
+        13,
+        12,
+        11,
+        13,
+        12,
+        12,
+        13
+      ],
+      "accuracy": 0.6526,
+      "fa": 1,
+      "fr": 4,
+      "flaky": 4,
+      "failures": [
+        {
+          "answer": "365",
+          "category": "경계",
+          "label": "incorrect",
+          "kind": "FA",
+          "flaky": true,
+          "passed": 13,
+          "runs": 20
+        },
+        {
+          "answer": "왓슨",
+          "category": "부분정답",
+          "label": "incorrect",
+          "kind": "FA",
+          "flaky": false,
+          "passed": 0,
+          "runs": 20
+        },
+        {
+          "answer": "왓슨, 크릭, 그리고 로절린드 프랭클린",
+          "category": "경계",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 20
+        },
+        {
+          "answer": "37도",
+          "category": "경계",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 20
+        },
+        {
+          "answer": "자석에 붙는 그 금속이요",
+          "category": "규칙-덜구체적",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": true,
+          "passed": 19,
+          "runs": 20
+        },
+        {
+          "answer": "조선 4대 임금이요",
+          "category": "규칙-덜구체적",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": true,
+          "passed": 13,
+          "runs": 20
+        },
+        {
+          "answer": "한국이랑 미국 사이에 있는 바다요",
+          "category": "규칙-덜구체적",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 20
+        },
+        {
+          "answer": "저혈구",
+          "category": "정답-변형",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 20
+        },
+        {
+          "answer": "태양에서 다섯 번째로 떨어져 있는 가스로 된 행성이요",
+          "category": "정답-패러프레이즈",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": true,
+          "passed": 3,
+          "runs": 20
+        }
+      ]
+    }
+  }
+}

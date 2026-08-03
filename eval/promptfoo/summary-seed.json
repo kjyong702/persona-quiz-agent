@@ -1,0 +1,90 @@
+{
+  "cases": 266,
+  "versions": {
+    "judge.v3+seed": {
+      "passed_per_run": [
+        260,
+        258,
+        260
+      ],
+      "accuracy": 0.9749,
+      "fa": 1,
+      "fr": 5,
+      "flaky": 2,
+      "failures": [
+        {
+          "answer": "365",
+          "category": "경계",
+          "label": "incorrect",
+          "kind": "FA",
+          "flaky": true,
+          "passed": 2,
+          "runs": 3
+        },
+        {
+          "answer": "여름에 드는 절기요",
+          "category": "규칙-덜구체적",
+          "label": "incorrect",
+          "kind": "FA",
+          "flaky": true,
+          "passed": 2,
+          "runs": 3
+        },
+        {
+          "answer": "왓슨",
+          "category": "부분정답",
+          "label": "incorrect",
+          "kind": "FA",
+          "flaky": false,
+          "passed": 0,
+          "runs": 3
+        },
+        {
+          "answer": "왓슨, 크릭, 그리고 로절린드 프랭클린",
+          "category": "경계",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 3
+        },
+        {
+          "answer": "37도",
+          "category": "경계",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 3
+        },
+        {
+          "answer": "조선 4대 임금이요",
+          "category": "규칙-덜구체적",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 3
+        },
+        {
+          "answer": "한국이랑 미국 사이에 있는 바다요",
+          "category": "규칙-덜구체적",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 3
+        },
+        {
+          "answer": "저혈구",
+          "category": "정답-변형",
+          "label": "correct",
+          "kind": "FR",
+          "flaky": false,
+          "passed": 0,
+          "runs": 3
+        }
+      ]
+    }
+  }
+}

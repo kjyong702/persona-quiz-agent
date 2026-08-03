@@ -3,6 +3,8 @@
 임베딩만으로 가릴 수 없는 답변을 판정한다. 프롬프트는 prompts/ 아래 버전 파일이고 어느 것을 쓰는지는 prompts.JUDGE_PROMPT가 정한다.
 """
 
+import math
+
 from openai import APIError, AsyncOpenAI
 
 from app.core import metrics, prompts
@@ -53,6 +55,42 @@ def parse_verdict(raw: str) -> bool:
     raise LLMUnavailableError(f"판정 응답을 해석할 수 없습니다: {raw!r}")
 
 
+def correct_probability(response: object) -> float | None:
+    """첫 토큰 후보에서 correct 쪽 확률을 모은다.
+
+    토큰 하나를 보는 것으로는 부족하다. `correct`, ` correct`, `Correct`, `cor`가
+    모두 같은 판정으로 이어지는데 후보 목록에는 따로 잡히기 때문이다. 정규화한
+    문자열을 키로 딕셔너리를 만들면 **뒤에 오는 낮은 확률이 앞의 높은 확률을
+    덮어써서** 1위 확률이 0으로 보인다. 실제로 그렇게 재다가 결론을 정반대로
+    읽을 뻔했다. 그래서 덮어쓰지 않고 더한다.
+    """
+    try:
+        top = response.choices[0].logprobs.content[0].top_logprobs  # type: ignore[attr-defined]
+    except (AttributeError, IndexError, TypeError):
+        return None
+    total = 0.0
+    for candidate in top:
+        token = candidate.token.strip().lower()
+        # incorrect가 correct를 포함하므로 incorrect를 먼저 걸러야 한다.
+        # parse_verdict에서 겪은 함정이 여기서도 그대로 나온다
+        if token.startswith("incorrect"):
+            continue
+        if token.startswith("correct") or token in ("cor", "corr"):
+            total += math.exp(candidate.logprob)
+    return total
+
+
+def _record_stability(response: object) -> None:
+    """이 판정이 다시 물었을 때 뒤집힐 자리인지 기록한다. 판정은 바꾸지 않는다."""
+    probability = correct_probability(response)
+    if probability is None:
+        return
+    if settings.unstable_low <= probability <= settings.unstable_high:
+        metrics.increment("judge.unstable", 1)
+    else:
+        metrics.increment("judge.stable", 1)
+
+
 async def judge_answer(
     question_text: str, expected_answers: list[str], answer_text: str
 ) -> bool:
@@ -71,12 +109,27 @@ async def judge_answer(
             # 판정은 매번 같은 답이 나와야 한다. 창의성이 필요한 자리가 아니다
             temperature=0,
             max_tokens=5,
+            # 시드는 best-effort다. 넣는다고 결정적이 되지는 않지만, 안 넣으면
+            # 제공사가 흔들림을 줄일 여지 자체가 없다. 상세는 config.judge_seed
+            **({"seed": settings.judge_seed} if settings.judge_seed is not None else {}),
+            # 판정이 흔들릴 자리인지 보려고 받는다. 응답이 커지지만 첫 토큰의
+            # 후보 5개뿐이라 비용 영향은 없다
+            logprobs=True,
+            top_logprobs=5,
         )
 
     try:
         response = await call_guarded(llm_gate, "llm", _call)
     except APIError as exc:
         raise LLMUnavailableError(f"판정 호출 실패: {exc}") from exc
+
+    # 제공사가 모델 가중치나 인프라 설정을 바꾸면 이 값이 바뀐다. 바뀌면 이전
+    # 평가 수치와 비교할 근거가 사라지므로, 흔들림을 조사할 때 가장 먼저 볼 값이다
+    fingerprint = getattr(response, "system_fingerprint", None)
+    if fingerprint:
+        metrics.increment(f"judge.fingerprint.{fingerprint}", 1)
+
+    _record_stability(response)
 
     content = response.choices[0].message.content  # type: ignore[attr-defined]
     if content is None:

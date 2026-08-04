@@ -114,7 +114,7 @@ curl localhost:8000/readyz
 ### 테스트와 평가
 
 ```bash
-uv run pytest                                              # 193건
+uv run pytest                                              # 196건
 uv run python -m scripts.analyze --sweep --holdout         # 임계값 (무료, 캐시 사용)
 npx promptfoo@latest eval -c eval/promptfoo/judge.yaml     # 판정 프롬프트 (유료)
 npx promptfoo@latest eval -c eval/promptfoo/persona.yaml --repeat 10   # 페르소나 회귀
@@ -179,6 +179,20 @@ structlog, promptfoo, Docker
 | **[build-log.md](docs/notes/build-log.md)** | **개발하면서 걸린 것들** (터진 것, 예방한 것, 발견한 구멍) |
 
 `docs/_templates/`는 다음 프로젝트에 복사해 쓰는 마스터 템플릿입니다.
+
+### skills
+
+`.claude/skills/`에 넷 있습니다. **반복하는 절차를 CLAUDE.md에서 뺀 것**이고,
+skill 본문은 쓸 때만 로드되므로 안 쓰는 동안 토큰을 먹지 않습니다.
+
+| skill | 언제 |
+|---|---|
+| `/close-phase` | Phase를 닫기 전. 기록처가 셋이라 하나씩 셉니다 |
+| `/eval` | 프롬프트나 임계값을 고친 뒤. **유료 호출이라 순서가 있습니다** |
+| `/threshold` | 앵커나 평가셋이 바뀐 뒤 |
+| `/build-log` | 뭔가 걸린 뒤. 성격 구분(🔴🟡🔵⚪) |
+
+유료 호출을 하는 셋은 `disable-model-invocation`을 걸어 **직접 부를 때만** 돌게 했습니다.
 
 ## 진행 상태
 

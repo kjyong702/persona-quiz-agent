@@ -11,10 +11,13 @@ Phase $ARGUMENTS를 닫기 전 점검이다. **세지 않고 눈으로 훑지 �
 
 ## 지금 상태
 
-- 마지막 커밋 5개: !`git log --oneline -5`
-- 빌드 로그 항목 수: !`grep -c '^## [🔴🟡🔵⚪]' docs/notes/build-log.md`
-- 측정 문서: !`ls docs/notes/*.md | wc -l`
-- 테스트: !`uv run pytest -q --collect-only 2>/dev/null | grep -oE '[0-9]+ tests collected'`
+**경로를 절대 경로로 쓴다.** 세션의 작업 디렉터리가 이 리포가 아닐 수 있다.
+실제로 리포 밖에서 이 skill을 부르면 상대 경로가 전부 깨진다.
+
+- 마지막 커밋 5개: !`git -C ~/persona-quiz-agent log --oneline -5`
+- 빌드 로그 항목 수: !`grep -c '^## [🔴🟡🔵⚪]' ~/persona-quiz-agent/docs/notes/build-log.md`
+- 측정 문서: !`ls ~/persona-quiz-agent/docs/notes/*.md | wc -l`
+- 테스트: !`cd ~/persona-quiz-agent && uv run pytest -q --collect-only 2>/dev/null | grep -oE '[0-9]+ tests collected'`
 
 ## 기록처 셋 — 다 확인한다
 
